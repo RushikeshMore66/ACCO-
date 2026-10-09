@@ -1,4 +1,8 @@
-version: "3.9"
+# Local Development Infrastructure
+# NOTE: Do NOT use this configuration for production.
+# 
+# Host to Container DB URL: postgresql+psycopg://postgres:postgres@localhost:5432/acco_dev
+# Container to Container DB URL: postgresql+psycopg://postgres:postgres@postgres:5432/acco_dev
 
 services:
   postgres:
@@ -10,6 +14,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
+      # Expose locally for developer tools; do NOT expose in production
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data

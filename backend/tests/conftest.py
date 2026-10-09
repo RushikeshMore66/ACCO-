@@ -1,17 +1,12 @@
+"""Shared test fixtures for the ACCO backend test suite."""
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import create_app
+from app.main import app
 
 
 @pytest.fixture(scope="session")
-def app():
-    """Create a FastAPI application instance for testing."""
-    return create_app()
-
-
-@pytest.fixture(scope="session")
-def client(app):
-    """Create a test client for sending synchronous HTTP requests to the app."""
+def client() -> TestClient:
+    """Provide a synchronous TestClient for the FastAPI application."""
     with TestClient(app) as c:
         yield c
