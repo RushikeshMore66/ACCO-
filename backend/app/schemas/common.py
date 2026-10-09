@@ -1,5 +1,6 @@
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -9,8 +10,8 @@ class BaseSchema(BaseModel):
 
 class StandardResponse(BaseModel):
     success: bool = True
-    message: Optional[str] = None
-    data: Optional[Any] = None
+    message: str | None = None
+    data: Any | None = None
 
 
 class TimestampedSchema(BaseSchema):

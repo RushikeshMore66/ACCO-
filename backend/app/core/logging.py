@@ -17,4 +17,4 @@ def setup_logging() -> None:
 
     # Silence overly verbose external loggers
     logging.getLogger("uvicorn.access").setLevel(logging.INFO)
-    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARN)
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)

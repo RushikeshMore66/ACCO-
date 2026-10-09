@@ -1,15 +1,13 @@
-from typing import Generator, Optional
-from fastapi import Header, HTTPException, status
-from sqlalchemy.orm import Session
+from fastapi import Header
 
 from app.db.session import get_db
 
 # Re-export get_db for convenient dependency injection
-__all__ = ["get_db", "get_current_organization_id"]
+__all__ = ["get_current_organization_id", "get_db"]
 
 
 async def get_current_organization_id(
-    x_organization_id: Optional[str] = Header(None, alias="X-Organization-ID")
+    x_organization_id: str | None = Header(None, alias="X-Organization-ID")
 ) -> str:
     """
     Placeholder dependency resolving the active tenant (Organization ID).

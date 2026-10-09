@@ -1,22 +1,27 @@
-from typing import Generator
+from collections.abc import Generator
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import settings
 
 # Engine configured with pool_pre_ping to automatically recover from dropped connections
-engine = create_engine(
-    settings.SQLALCHEMY_DATABASE_URI,
-    pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20,
-)
+engine = None
+SessionLocal = None
 
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine,
-)
+if settings.database_url:
+    engine = create_engine(
+        settings.database_url,
+        echo=settings.database_echo,
+        pool_pre_ping=True,
+        pool_size=10,
+        max_overflow=20,
+    )
+    SessionLocal = sessionmaker(
+        autocommit=False,
+        autoflush=False,
+        bind=engine,
+    )
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -25,6 +30,9 @@ def get_db() -> Generator[Session, None, None]:
     Automatically closes the session. Caller is responsible for explicit commits.
     Rolls back transaction on unhandled exceptions.
     """
+    if SessionLocal is None:
+        raise RuntimeError("Database URL is not configured.")
+
     db = SessionLocal()
     try:
         yield db

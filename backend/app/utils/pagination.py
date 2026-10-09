@@ -1,4 +1,6 @@
-from typing import Generic, Sequence, TypeVar
+from collections.abc import Sequence
+from typing import Generic, TypeVar
+
 from pydantic import BaseModel, Field
 
 from app.core.constants import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE

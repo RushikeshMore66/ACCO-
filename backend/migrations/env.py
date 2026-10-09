@@ -20,7 +20,10 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
-    return settings.SQLALCHEMY_DATABASE_URI
+    url = settings.database_url
+    if not url:
+        raise RuntimeError("Database URL is not configured. Alembic cannot proceed.")
+    return url
 
 
 def run_migrations_offline() -> None:

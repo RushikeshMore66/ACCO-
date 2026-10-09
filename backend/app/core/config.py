@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     app_name: str = "ACCO"
     environment: str = "development"
     api_v1_prefix: str = "/api/v1"
+    database_url: str | None = None
+    database_echo: bool = False
 
 
 @lru_cache(maxsize=1)
