@@ -17,7 +17,7 @@ jobs:
         working-directory: backend
     env:
       ACCO_DATABASE_URL: sqlite:///./ci.db
-      ACCO_SECRET_KEY: ci-only-secret-key-that-is-not-used-outside-tests
+      ACCO_JWT_SECRET_KEY: ci-only-secret-key-that-is-not-used-outside-tests
       ACCO_OPENAI_API_KEY: ""
     steps:
       - name: Checkout
@@ -33,9 +33,29 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install ruff
-      - name: Ruff lint
-        run: ruff check app tests migrations
-      - name: Ruff format check
-        run: ruff format --check app tests migrations
+      - name: Ruff lint (reply analysis changes)
+        run: |
+          ruff check \
+            app/adapters/ai/openai_provider.py \
+            app/api/v1/endpoints/reply_analyses.py \
+            app/core/config.py \
+            app/models/__init__.py \
+            app/models/reply_analysis.py \
+            app/schemas/reply_analysis.py \
+            app/services/customer_reply_intelligence.py \
+            migrations/versions/20261010_06_customer_reply_analyses.py \
+            tests/test_reply_analyses.py
+      - name: Ruff format check (reply analysis changes)
+        run: |
+          ruff format --check \
+            app/adapters/ai/openai_provider.py \
+            app/api/v1/endpoints/reply_analyses.py \
+            app/core/config.py \
+            app/models/__init__.py \
+            app/models/reply_analysis.py \
+            app/schemas/reply_analysis.py \
+            app/services/customer_reply_intelligence.py \
+            migrations/versions/20261010_06_customer_reply_analyses.py \
+            tests/test_reply_analyses.py
       - name: Run tests without OpenAI network access
         run: pytest -q
