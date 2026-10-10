@@ -5,9 +5,11 @@ from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from sqlalchemy.orm import Session
 
+from typing import List
+
 from app.core.config import settings
 from app.db.session import get_db
-from app.models.user import User
+from app.models.user import User, UserRole
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.api_v1_prefix}/auth/login")
 
@@ -65,9 +67,6 @@ def get_current_active_user(current_user: User = Depends(get_current_user)) -> U
     
 def get_current_organization_id(current_user: User = Depends(get_current_user)) -> str:
     return str(current_user.organization_id)
-
-from typing import List
-from app.models.user import UserRole
 
 def require_roles(allowed_roles: List[UserRole]):
     def role_checker(current_user: User = Depends(get_current_user)) -> User:

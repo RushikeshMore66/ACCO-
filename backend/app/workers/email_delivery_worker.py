@@ -3,8 +3,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
 from app.models.email_delivery import EmailDelivery, DeliveryStatus, EmailDeliveryAttempt
-from app.adapters.email.resend_provider import ResendProvider
-import uuid
 from datetime import datetime, UTC
 
 def process_batch(db: Session, batch_size: int = 10):

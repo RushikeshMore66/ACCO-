@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Optional, List
+from typing import Optional
 import uuid
 from decimal import Decimal
 from pydantic import BaseModel, ConfigDict
@@ -10,6 +10,7 @@ class PromiseCreate(BaseModel):
     expected_payment_date: date
     follow_up_date: Optional[date] = None
     source_message_id: Optional[uuid.UUID] = None
+    reply_analysis_id: Optional[uuid.UUID] = None
     notes: Optional[str] = None
 
 class PromiseCancel(BaseModel):
@@ -26,6 +27,7 @@ class PromiseResponse(BaseModel):
     status: PromiseStatus
     recorded_by_user_id: Optional[uuid.UUID]
     source_message_id: Optional[uuid.UUID]
+    reply_analysis_id: Optional[uuid.UUID]
     notes: Optional[str]
     created_at: datetime
     updated_at: datetime

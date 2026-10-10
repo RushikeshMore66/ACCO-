@@ -1,12 +1,12 @@
 import uuid
-from datetime import datetime, UTC, date, timedelta
-from typing import List, Any
+from datetime import datetime, UTC, timedelta
+from typing import List
 from decimal import Decimal
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func
+from sqlalchemy import select
 
-from app.api.deps import get_db, get_current_user, require_roles
+from app.api.deps import get_db, require_roles
 from app.models.user import User, UserRole
 from app.models.invoice import Invoice, InvoiceStatus
 from app.models.payment import Payment
@@ -14,8 +14,9 @@ from app.models.payment_allocation import PaymentAllocation
 from app.models.payment_reversal import PaymentReversal
 from app.models.collection_workflow import (
     PaymentPromise, CollectionDispute, CollectionActivity, 
-    PromiseStatus, DisputeStatus, DisputeCategory, EventType
+    PromiseStatus, DisputeStatus, EventType
 )
+from app.models.reply_analysis import CustomerReplyAnalysis, AnalysisStatus, ReplyClassification
 from app.schemas.promises_disputes import (
     PromiseCreate, PromiseCancel, PromiseResponse, 
     DisputeCreate, DisputeResolve, DisputeReject, DisputeResponse
@@ -62,6 +63,46 @@ def create_promise(
     if follow_up < req.expected_payment_date:
         raise HTTPException(status_code=400, detail="Follow up date must be on or after expected date")
         
+    # If this promise is generated from a reply analysis, validate the reference
+    if req.reply_analysis_id:
+        analysis = db.scalar(
+            select(CustomerReplyAnalysis)
+            .where(
+                CustomerReplyAnalysis.id == req.reply_analysis_id,
+                CustomerReplyAnalysis.organization_id == current_user.organization_id
+            )
+        )
+        if not analysis:
+            raise HTTPException(status_code=404, detail="Reply analysis not found")
+        if analysis.status != AnalysisStatus.ACCEPTED:
+            raise HTTPException(status_code=400, detail="Reply analysis must be accepted before creating a promise")
+        if analysis.classification != ReplyClassification.PAYMENT_PROMISE:
+            raise HTTPException(status_code=400, detail="Reply analysis is not classified as a payment promise")
+        if analysis.invoice_id and analysis.invoice_id != invoice.id:
+            raise HTTPException(status_code=400, detail="Invoice mismatch with analysis")
+        if analysis.customer_id != invoice.customer_id:
+            raise HTTPException(status_code=400, detail="Customer mismatch with analysis")
+            
+        # Ensure source message ID matches analysis if provided, otherwise default to analysis source message
+        if req.source_message_id and req.source_message_id != analysis.source_message_id:
+            raise HTTPException(status_code=400, detail="Source message ID mismatch with analysis")
+        req.source_message_id = analysis.source_message_id
+
+        # Check for idempotent retry from the same analysis
+        existing_linked_promise = db.scalar(
+            select(PaymentPromise).where(
+                PaymentPromise.reply_analysis_id == req.reply_analysis_id
+            )
+        )
+        if existing_linked_promise:
+            # Check if retry matches existing linked promise fields
+            if (existing_linked_promise.promised_amount == req.promised_amount and
+                existing_linked_promise.expected_payment_date == req.expected_payment_date and
+                existing_linked_promise.invoice_id == invoice.id):
+                return existing_linked_promise
+            else:
+                raise HTTPException(status_code=409, detail="A conflicting promise was already created from this analysis")
+
     # Check for overlapping active promises
     existing_promise = db.scalar(select(PaymentPromise).where(
         PaymentPromise.invoice_id == invoice.id,
@@ -81,6 +122,7 @@ def create_promise(
         status=PromiseStatus.ACTIVE,
         recorded_by_user_id=current_user.id,
         source_message_id=req.source_message_id,
+        reply_analysis_id=req.reply_analysis_id,
         notes=req.notes
     )
     db.add(promise)
@@ -125,7 +167,7 @@ def mark_promise_fulfilled(
             PaymentAllocation.invoice_id == promise.invoice_id,
             PaymentAllocation.created_at >= promise.created_at,
             Payment.payment_date <= promise.expected_payment_date,
-            PaymentReversal.id == None
+            PaymentReversal.id is None
         )
     ).all()
     

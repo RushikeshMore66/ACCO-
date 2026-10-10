@@ -1,5 +1,5 @@
-from datetime import datetime, date
-from typing import List, Optional, Dict
+from datetime import datetime
+from typing import List, Optional
 from pydantic import BaseModel
 from app.models.collection_policy import CollectionPolicy
 from app.models.collection_workflow import CollectionDispute, PaymentPromise, DisputeStatus, PromiseStatus

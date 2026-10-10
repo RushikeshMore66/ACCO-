@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
-from app.api.deps import get_db, get_current_user, require_roles
+from app.api.deps import get_db, require_roles
 from app.models.user import User, UserRole
 from app.models.collection_workflow import CollectionMessage, MessageStatus, MessageDirection, MessageChannel
 from app.models.email_delivery import EmailDelivery, DeliveryStatus

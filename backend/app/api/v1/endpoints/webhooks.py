@@ -9,7 +9,7 @@ router = APIRouter()
 @router.post("/email/resend", status_code=status.HTTP_200_OK)
 async def resend_webhook(request: Request, db: Session = Depends(get_db)):
     # 1. Read raw body and signature headers
-    payload = await request.body()
+    await request.body()
     svix_id = request.headers.get("svix-id")
     svix_timestamp = request.headers.get("svix-timestamp")
     svix_signature = request.headers.get("svix-signature")

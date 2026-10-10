@@ -1,10 +1,8 @@
 import pytest
-import uuid
 from datetime import datetime, UTC
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.models.collection_workflow import MessageDirection, MessageChannel, MessageStatus
 from app.models.invoice import Invoice, InvoiceStatus
 from app.models.customer import Customer
 from app.models.user import User

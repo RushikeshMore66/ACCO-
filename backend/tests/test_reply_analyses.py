@@ -7,9 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.adapters.ai.openai_provider import AIProviderUnavailable
 from app.models.collection_workflow import (
-    CollectionActivity,
     CollectionMessage,
-    EventType,
     MessageChannel,
     MessageDirection,
     MessageStatus,
@@ -154,8 +152,7 @@ def test_analysis_endpoints_and_one_time_review(
     from app.api.v1.endpoints import reply_analyses
 
     fake = FakeProvider()
-    original = reply_analyses.get_reply_provider_factory
-    reply_analyses.get_reply_provider_factory = lambda: (lambda: fake)
+    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (lambda: fake)
     try:
         response = client.post(
             f"/api/v1/collections/messages/{reply_data['message'].id}/analyze",
@@ -196,16 +193,17 @@ def test_analysis_endpoints_and_one_time_review(
         )
         assert activities.status_code == 200
     finally:
-        reply_analyses.get_reply_provider_factory = original
+        client.app.dependency_overrides.pop(reply_analyses.get_reply_provider_factory, None)
 
 
 def test_unconfigured_provider_is_service_unavailable(client, normal_user_token_headers, reply_data):
     from app.api.v1.endpoints import reply_analyses
 
-    original = reply_analyses.get_reply_provider_factory
-    reply_analyses.get_reply_provider_factory = lambda: (_ for _ in ()).throw(
-        __import__("app.adapters.ai.openai_provider", fromlist=["AIProviderNotConfigured"]).AIProviderNotConfigured("safe")
-    )
+    def raise_not_configured():
+        from app.adapters.ai.openai_provider import AIProviderNotConfigured
+        raise AIProviderNotConfigured("safe")
+
+    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: raise_not_configured
     try:
         response = client.post(
             f"/api/v1/collections/messages/{reply_data['message'].id}/analyze",
@@ -213,4 +211,4 @@ def test_unconfigured_provider_is_service_unavailable(client, normal_user_token_
         )
         assert response.status_code == 503
     finally:
-        reply_analyses.get_reply_provider_factory = original
+        client.app.dependency_overrides.pop(reply_analyses.get_reply_provider_factory, None)

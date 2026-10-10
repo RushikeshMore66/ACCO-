@@ -1,22 +1,142 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --card: #ffffff;
-  --card-foreground: #0f172a;
-  --primary: #0284c7;
-  --primary-foreground: #ffffff;
-  --muted: #64748b;
-  --border: #e2e8f0;
+@layer base {
+  :root {
+    /* Brand */
+    --brand: 109 67 217;
+    --brand-dark: 81 38 184;
+    --brand-light: 139 104 224;
+    --brand-lavender: 242 237 255;
+
+    /* Surfaces */
+    --surface: 247 248 252;
+    --surface-card: 255 255 255;
+    --surface-border: 230 232 239;
+
+    /* Text */
+    --text-primary: 32 37 54;
+    --text-secondary: 107 114 128;
+    --text-muted: 156 163 175;
+
+    /* Status */
+    --success: 22 133 103;
+    --success-bg: 236 250 245;
+    --warning: 200 135 24;
+    --warning-bg: 254 246 228;
+    --error: 214 69 80;
+    --error-bg: 254 240 240;
+    --info: 55 119 200;
+    --info-bg: 235 242 253;
+
+    /* Sidebar */
+    --sidebar-width: 256px;
+    --sidebar-collapsed-width: 64px;
+    --topbar-height: 60px;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: rgb(var(--surface));
+    color: rgb(var(--text-primary));
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    margin: 0;
+    padding: 0;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgb(var(--surface-border));
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--text-muted));
+  }
+
+  /* Focus visible */
+  :focus-visible {
+    outline: 2px solid rgb(var(--brand));
+    outline-offset: 2px;
+  }
+
+  /* Remove default button styles */
+  button {
+    font-family: inherit;
+  }
 }
 
-body {
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  margin: 0;
-  padding: 0;
+@layer components {
+  /* Financial amount alignment */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Skeleton shimmer */
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      rgb(var(--surface-border)) 25%,
+      rgb(230 232 239 / 0.5) 50%,
+      rgb(var(--surface-border)) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  /* Sidebar nav item */
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-150 cursor-pointer;
+    color: rgb(var(--text-secondary));
+  }
+
+  .nav-item:hover {
+    background-color: rgb(var(--brand-lavender));
+    color: rgb(var(--brand));
+  }
+
+  .nav-item.active {
+    background-color: rgb(var(--brand-lavender));
+    color: rgb(var(--brand));
+    font-weight: 600;
+  }
+
+  /* Status badge base */
+  .status-badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  /* Card */
+  .acco-card {
+    @apply bg-white rounded-lg border border-surface-border shadow-card;
+  }
+}
+
+@layer utilities {
+  .text-brand { color: rgb(var(--brand)); }
+  .bg-brand { background-color: rgb(var(--brand)); }
+  .border-brand { border-color: rgb(var(--brand)); }
+  .ring-brand { --tw-ring-color: rgb(var(--brand)); }
 }

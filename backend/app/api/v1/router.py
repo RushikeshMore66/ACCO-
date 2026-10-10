@@ -1,6 +1,19 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import health
+from app.api.v1.endpoints import (
+    health,
+    auth,
+    customers,
+    invoices,
+    payments,
+    receivables,
+    collections,
+    collections_messages,
+    promises_disputes,
+    email_deliveries,
+    reply_analyses,
+    webhooks,
+)
 
 api_router = APIRouter()
 
@@ -8,43 +21,28 @@ api_router = APIRouter()
 api_router.include_router(health.router, prefix="/health", tags=["health"])
 
 # Authentication
-from app.api.v1.endpoints import auth
-
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 
 # Customers
-from app.api.v1.endpoints import customers
 api_router.include_router(customers.router, prefix="/customers", tags=["customers"])
 
 # Invoices
-from app.api.v1.endpoints import invoices
 api_router.include_router(invoices.router, prefix="/invoices", tags=["invoices"])
 
 # Payments
-from app.api.v1.endpoints import payments
 api_router.include_router(payments.router, prefix="/payments", tags=["payments"])
 
 # Receivables
-from app.api.v1.endpoints import receivables
 api_router.include_router(receivables.router, prefix="/receivables", tags=["receivables"])
 
 # Collections
-from app.api.v1.endpoints import collections
 api_router.include_router(collections.router, prefix="/collections", tags=["collections"])
-
-from app.api.v1.endpoints import collections_messages
 api_router.include_router(collections_messages.router, prefix="/collections", tags=["collections_messages"])
-
-from app.api.v1.endpoints import promises_disputes
 api_router.include_router(promises_disputes.router, prefix="/collections", tags=["promises_disputes"])
-
-from app.api.v1.endpoints import email_deliveries
 api_router.include_router(email_deliveries.router, prefix="/collections", tags=["email_deliveries"])
-
-from app.api.v1.endpoints import reply_analyses
 api_router.include_router(reply_analyses.router, prefix="/collections", tags=["reply_analyses"])
 
-from app.api.v1.endpoints import webhooks
+# Webhooks
 api_router.include_router(webhooks.router, prefix="/webhooks", tags=["webhooks"])
 
 # NOTE: Domain endpoints (payments, collections, communications, policies, dashboard) are maintained

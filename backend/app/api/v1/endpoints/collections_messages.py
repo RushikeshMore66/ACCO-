@@ -1,11 +1,11 @@
 import uuid
 from datetime import datetime, UTC
-from typing import List, Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import List
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
-from app.api.deps import get_db, get_current_user, require_roles
+from app.api.deps import get_db, require_roles
 from app.models.user import User, UserRole
 from app.models.invoice import Invoice, InvoiceStatus
 from app.models.collection_workflow import (
