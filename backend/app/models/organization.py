@@ -1,5 +1,13 @@
 import uuid
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.user import User
+    from app.models.customer import Customer
+    from app.models.invoice import Invoice
+    from app.models.payment import Payment
+
 
 from sqlalchemy import Boolean, DateTime, String
 from sqlalchemy.dialects.postgresql import UUID
@@ -32,4 +40,13 @@ class Organization(Base):
 
     users: Mapped[list["User"]] = relationship(
         "User", back_populates="organization", cascade="all, delete-orphan"
+    )
+    customers: Mapped[list["Customer"]] = relationship(
+        "Customer", back_populates="organization", cascade="all, delete-orphan"
+    )
+    invoices: Mapped[list["Invoice"]] = relationship(
+        "Invoice", back_populates="organization", cascade="all, delete-orphan"
+    )
+    payments: Mapped[list["Payment"]] = relationship(
+        "Payment", back_populates="organization", cascade="all, delete-orphan"
     )

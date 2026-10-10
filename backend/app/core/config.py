@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     database_url: str | None = None
     database_echo: bool = False
+    jwt_secret_key: str | None = None
+    access_token_expire_minutes: int = 30
+    jwt_issuer: str = "acco"
 
 
 @lru_cache(maxsize=1)

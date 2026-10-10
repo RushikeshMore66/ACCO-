@@ -20,9 +20,8 @@ def health_check() -> dict[str, Any]:
     """
     return {
         "status": "ok",
-        "service": settings.PROJECT_NAME,
-        "version": settings.VERSION,
-        "environment": settings.ENVIRONMENT,
+        "service": settings.app_name,
+        "environment": settings.environment,
         "server_time_utc": datetime.now(UTC).isoformat(),
     }
 
