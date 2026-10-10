@@ -10,7 +10,7 @@ uvicorn[standard]>=0.28.0
 pydantic>=2.6.0
 pydantic-settings>=2.2.0
 
-# Database (used from Step 2 onward)
+# Database
 sqlalchemy>=2.0.28
 psycopg[binary]>=3.1.0
 alembic>=1.13.1
@@ -28,3 +28,6 @@ PyJWT>=2.8.0
 pwdlib[argon2]>=0.2.0
 email-validator>=2.1.1
 python-multipart>=0.0.9
+
+# AI provider: structured output parsing via the official OpenAI SDK
+openai>=1.66.0,<3.0.0
