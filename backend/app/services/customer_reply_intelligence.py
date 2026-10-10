@@ -56,7 +56,8 @@ def analyze_customer_reply(
         raise AIProviderError("The customer reply could not be analyzed safely.") from None
 
     # Deterministic safeguards run after model output. This analysis is advisory only.
-    if extraction.explicit_payment_amount is not None and extraction.explicit_payment_amount <= Decimal("0"):
+    amount = extraction.explicit_payment_amount
+    if amount is not None and (not amount.is_finite() or amount <= Decimal("0")):
         extraction.explicit_payment_amount = None
         extraction.requires_human_review = True
 
