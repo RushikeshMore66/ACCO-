@@ -3,7 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.reply_analysis import AnalysisStatus, ReplyClassification
 
@@ -38,7 +38,7 @@ class LLMExtractionResult(BaseModel):
 
 
 class CustomerReplyAnalysisResponse(BaseModel):
-    """Safe API view of a persisted analysis; contains no source-message body."""
+    """Safe API view of a persisted analysis; does not expose the source message body."""
 
     id: uuid.UUID
     organization_id: uuid.UUID
@@ -69,6 +69,7 @@ class ReplyAnalysisReviewRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    @field_validator("decision")
     @classmethod
     def validate_decision(cls, value: AnalysisStatus) -> AnalysisStatus:
         if value not in (AnalysisStatus.ACCEPTED, AnalysisStatus.DISMISSED):
