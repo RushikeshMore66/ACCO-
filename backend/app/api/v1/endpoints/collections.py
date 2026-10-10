@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
-from app.models.user import User
+from app.api.deps import get_current_user, get_db, require_roles
+from app.models.user import User, UserRole
 from app.models.collection_policy import CollectionPolicy
 from app.models.invoice import Invoice, InvoiceStatus
 from app.models.customer import Customer
@@ -38,7 +38,7 @@ def update_policy(
     *,
     db: Session = Depends(get_db),
     policy_in: CollectionPolicyUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles([UserRole.OWNER, UserRole.FINANCE_MANAGER])),
 ) -> Any:
     policy = db.scalar(
         select(CollectionPolicy)

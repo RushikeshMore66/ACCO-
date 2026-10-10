@@ -8,7 +8,7 @@ from app.core.config import settings
 from app.core.security import create_access_token, dummy_verify, get_password_hash, verify_password
 from app.db.session import get_db
 from app.models.organization import Organization
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.auth import RegisterRequest, Token, UserResponse
 
 router = APIRouter()
@@ -33,7 +33,8 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
         email=email_normalized,
         full_name=request.full_name,
         password_hash=get_password_hash(request.password),
-        organization=org
+        organization=org,
+        role=UserRole.OWNER
     )
     db.add(user)
     

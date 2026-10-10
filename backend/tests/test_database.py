@@ -4,8 +4,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app.models.organization import Organization
-from app.models.user import User
-
+from app.models.user import User, UserRole
 
 def test_insert_and_query_organization(db_session):
     org = Organization(name="Test Org", slug="test-org")
@@ -23,7 +22,7 @@ def test_insert_and_query_user(db_session):
     db_session.add(org)
     db_session.commit()
 
-    user = User(organization_id=org.id, email="test@example.com", full_name="Test User", password_hash="hash")
+    user = User(organization_id=org.id, email="test@example.com", full_name="Test User", password_hash="hash", role=UserRole.OWNER)
     db_session.add(user)
     db_session.commit()
     
@@ -36,7 +35,7 @@ def test_insert_and_query_user(db_session):
 def test_foreign_key_constraint(db_session):
     # Try inserting user without valid org
     import uuid
-    user = User(organization_id=uuid.uuid4(), email="test2@example.com", full_name="Test User", password_hash="hash")
+    user = User(organization_id=uuid.uuid4(), email="test2@example.com", full_name="Test User", password_hash="hash", role=UserRole.OWNER)
     db_session.add(user)
     with pytest.raises(IntegrityError):
         db_session.commit()

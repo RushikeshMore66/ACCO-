@@ -32,5 +32,11 @@ api_router.include_router(receivables.router, prefix="/receivables", tags=["rece
 from app.api.v1.endpoints import collections
 api_router.include_router(collections.router, prefix="/collections", tags=["collections"])
 
+from app.api.v1.endpoints import collections_messages
+api_router.include_router(collections_messages.router, prefix="/collections", tags=["collections_messages"])
+
+from app.api.v1.endpoints import promises_disputes
+api_router.include_router(promises_disputes.router, prefix="/collections", tags=["promises_disputes"])
+
 # NOTE: Domain endpoints (payments, collections, communications, policies, dashboard) are maintained
 # as separate minimal placeholders until their respective implementation milestones.
