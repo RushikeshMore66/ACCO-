@@ -61,8 +61,6 @@ class CollectionMessage(Base):
             ['organization_id', 'customer_id'],
             ['customers.organization_id', 'customers.id']
         ),
-        # Assuming we can't reliably enforce invoice_id being in the same org via composite FK if it's optional, 
-        # so we rely on application checks. But if it is provided, we could use a partial index or CheckConstraint.
     )
 
 class PromiseStatus(str, enum.Enum):
@@ -153,6 +151,9 @@ class EventType(str, enum.Enum):
     MESSAGE_CANCELLED = "MESSAGE_CANCELLED"
     INBOUND_RECORDED = "INBOUND_RECORDED"
     NOTE_RECORDED = "NOTE_RECORDED"
+    REPLY_ANALYSIS_CREATED = "REPLY_ANALYSIS_CREATED"
+    REPLY_ANALYSIS_ACCEPTED = "REPLY_ANALYSIS_ACCEPTED"
+    REPLY_ANALYSIS_DISMISSED = "REPLY_ANALYSIS_DISMISSED"
     PROMISE_CREATED = "PROMISE_CREATED"
     PROMISE_FULFILLED = "PROMISE_FULFILLED"
     PROMISE_MISSED = "PROMISE_MISSED"
