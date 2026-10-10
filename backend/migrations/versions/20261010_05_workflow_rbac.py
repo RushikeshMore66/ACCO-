@@ -17,24 +17,50 @@ depends_on = None
 
 def upgrade() -> None:
     # 1. Create Enums
-    user_role_enum = sa.Enum('OWNER', 'FINANCE_MANAGER', 'COLLECTOR', 'VIEWER', name='userrole')
-    msg_dir_enum = sa.Enum('INBOUND', 'OUTBOUND', 'INTERNAL_NOTE', name='messagedirection')
-    msg_chan_enum = sa.Enum('EMAIL', 'WHATSAPP', 'PHONE', 'INTERNAL', name='messagechannel')
-    msg_status_enum = sa.Enum('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'CANCELLED', 'RECEIVED', 'RECORDED', name='messagestatus')
-    promise_status_enum = sa.Enum('ACTIVE', 'FULFILLED', 'MISSED', 'CANCELLED', name='promisestatus')
-    dispute_category_enum = sa.Enum('INCORRECT_AMOUNT', 'DUPLICATE_INVOICE', 'SERVICE_OR_PRODUCT_ISSUE', 'TAX_OR_BILLING_ISSUE', 'PAYMENT_ALREADY_MADE', 'OTHER', name='disputecategory')
-    dispute_status_enum = sa.Enum('OPEN', 'UNDER_REVIEW', 'RESOLVED', 'REJECTED', name='disputestatus')
+    user_role_enum = sa.Enum('OWNER', 'FINANCE_MANAGER', 'COLLECTOR', 'VIEWER', name='userrole', create_type=False)
+    msg_dir_enum = sa.Enum('INBOUND', 'OUTBOUND', 'INTERNAL_NOTE', name='messagedirection', create_type=False)
+    msg_chan_enum = sa.Enum('EMAIL', 'WHATSAPP', 'PHONE', 'INTERNAL', name='messagechannel', create_type=False)
+    msg_status_enum = sa.Enum('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'CANCELLED', 'RECEIVED', 'RECORDED', name='messagestatus', create_type=False)
+    promise_status_enum = sa.Enum('ACTIVE', 'FULFILLED', 'MISSED', 'CANCELLED', name='promisestatus', create_type=False)
+    dispute_category_enum = sa.Enum('INCORRECT_AMOUNT', 'DUPLICATE_INVOICE', 'SERVICE_OR_PRODUCT_ISSUE', 'TAX_OR_BILLING_ISSUE', 'PAYMENT_ALREADY_MADE', 'OTHER', name='disputecategory', create_type=False)
+    dispute_status_enum = sa.Enum('OPEN', 'UNDER_REVIEW', 'RESOLVED', 'REJECTED', name='disputestatus', create_type=False)
     event_type_enum = sa.Enum(
-        'POLICY_UPDATED', 'MESSAGE_CREATED', 'MESSAGE_EDITED', 'MESSAGE_SUBMITTED', 
-        'MESSAGE_APPROVED', 'MESSAGE_REJECTED', 'MESSAGE_CANCELLED', 'INBOUND_RECORDED', 
-        'NOTE_RECORDED', 'PROMISE_CREATED', 'PROMISE_FULFILLED', 'PROMISE_MISSED', 
-        'PROMISE_CANCELLED', 'DISPUTE_OPENED', 'DISPUTE_UNDER_REVIEW', 'DISPUTE_RESOLVED', 
-        'DISPUTE_REJECTED', 'COLLECTION_PAUSED', 'COLLECTION_RESUMED', 
-        name='eventtype'
+        'POLICY_UPDATED', 'MESSAGE_CREATED', 'MESSAGE_EDITED', 'MESSAGE_SUBMITTED',
+        'MESSAGE_APPROVED', 'MESSAGE_REJECTED', 'MESSAGE_CANCELLED', 'INBOUND_RECORDED',
+        'NOTE_RECORDED', 'PROMISE_CREATED', 'PROMISE_FULFILLED', 'PROMISE_MISSED',
+        'PROMISE_CANCELLED', 'DISPUTE_OPENED', 'DISPUTE_UNDER_REVIEW', 'DISPUTE_RESOLVED',
+        'DISPUTE_REJECTED', 'COLLECTION_PAUSED', 'COLLECTION_RESUMED',
+        name='eventtype', create_type=False
     )
 
-    # Note: Alembic creates enums automatically if bind is PG when using sa.Enum. 
-    # But for SQLite it just uses VARCHAR. So it's safe to just define them.
+    # Explicitly CREATE all PostgreSQL enum types before any DDL references them.
+    # Alembic does NOT auto-issue CREATE TYPE for enums used in op.add_column.
+    # We use idempotent DO $$ blocks because CREATE TYPE has no IF NOT EXISTS
+    # before PostgreSQL 14, and checkfirst=True on sa.Enum is unreliable with psycopg3.
+    bind = op.get_bind()
+    if bind.engine.name == 'postgresql':
+        def _create_enum_safe(type_name: str, values: list[str]) -> None:
+            values_sql = ", ".join(f"'{v}'" for v in values)
+            bind.execute(sa.text(
+                f"DO $$ BEGIN "
+                f"  CREATE TYPE {type_name} AS ENUM ({values_sql}); "
+                f"EXCEPTION WHEN duplicate_object THEN NULL; "
+                f"END $$"
+            ))
+        _create_enum_safe('userrole', ['OWNER', 'FINANCE_MANAGER', 'COLLECTOR', 'VIEWER'])
+        _create_enum_safe('messagedirection', ['INBOUND', 'OUTBOUND', 'INTERNAL_NOTE'])
+        _create_enum_safe('messagechannel', ['EMAIL', 'WHATSAPP', 'PHONE', 'INTERNAL'])
+        _create_enum_safe('messagestatus', ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'CANCELLED', 'RECEIVED', 'RECORDED'])
+        _create_enum_safe('promisestatus', ['ACTIVE', 'FULFILLED', 'MISSED', 'CANCELLED'])
+        _create_enum_safe('disputecategory', ['INCORRECT_AMOUNT', 'DUPLICATE_INVOICE', 'SERVICE_OR_PRODUCT_ISSUE', 'TAX_OR_BILLING_ISSUE', 'PAYMENT_ALREADY_MADE', 'OTHER'])
+        _create_enum_safe('disputestatus', ['OPEN', 'UNDER_REVIEW', 'RESOLVED', 'REJECTED'])
+        _create_enum_safe('eventtype', [
+            'POLICY_UPDATED', 'MESSAGE_CREATED', 'MESSAGE_EDITED', 'MESSAGE_SUBMITTED',
+            'MESSAGE_APPROVED', 'MESSAGE_REJECTED', 'MESSAGE_CANCELLED', 'INBOUND_RECORDED',
+            'NOTE_RECORDED', 'PROMISE_CREATED', 'PROMISE_FULFILLED', 'PROMISE_MISSED',
+            'PROMISE_CANCELLED', 'DISPUTE_OPENED', 'DISPUTE_UNDER_REVIEW', 'DISPUTE_RESOLVED',
+            'DISPUTE_REJECTED', 'COLLECTION_PAUSED', 'COLLECTION_RESUMED',
+        ])
 
     # 2. Add role column to users (nullable first)
     op.add_column('users', sa.Column('role', user_role_enum, nullable=True))
