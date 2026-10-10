@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Callable
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, update
@@ -82,7 +83,10 @@ def analyze_message(
     if message is None:
         raise HTTPException(status_code=404, detail="Message not found")
     if message.direction != MessageDirection.INBOUND:
-        raise HTTPException(status_code=409, detail="Only inbound customer messages can be analyzed")
+        raise HTTPException(
+            status_code=409,
+            detail="Only inbound customer messages can be analyzed",
+        )
 
     try:
         provider = provider_factory()
@@ -207,7 +211,7 @@ def review_analysis(
         .values(
             status=decision,
             reviewed_by_user_id=current_user.id,
-            reviewed_at=__import__("datetime").datetime.now(__import__("datetime").UTC),
+            reviewed_at=datetime.now(UTC),
             review_notes=review_req.review_notes,
         )
     )
