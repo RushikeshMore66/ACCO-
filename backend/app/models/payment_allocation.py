@@ -16,7 +16,6 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.organization import Organization
-    from app.models.customer import Customer
     from app.models.payment import Payment
     from app.models.invoice import Invoice
     from app.models.user import User

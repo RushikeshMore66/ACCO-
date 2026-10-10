@@ -7,6 +7,7 @@ if TYPE_CHECKING:
     from app.models.customer import Customer
     from app.models.invoice import Invoice
     from app.models.payment import Payment
+    from app.models.collection_policy import CollectionPolicy
 
 
 from sqlalchemy import Boolean, DateTime, String
@@ -49,4 +50,7 @@ class Organization(Base):
     )
     payments: Mapped[list["Payment"]] = relationship(
         "Payment", back_populates="organization", cascade="all, delete-orphan"
+    )
+    collection_policy: Mapped["CollectionPolicy | None"] = relationship(
+        "CollectionPolicy", back_populates="organization", cascade="all, delete-orphan", uselist=False
     )

@@ -9,5 +9,6 @@ from app.models.invoice import Invoice
 from app.models.payment import Payment
 from app.models.payment_allocation import PaymentAllocation
 from app.models.payment_reversal import PaymentReversal
+from app.models.collection_policy import CollectionPolicy
 
-__all__ = ["Base", "Organization", "User", "Customer", "Invoice", "Payment", "PaymentAllocation", "PaymentReversal"]
+__all__ = ["Base", "Organization", "User", "Customer", "Invoice", "Payment", "PaymentAllocation", "PaymentReversal", "CollectionPolicy"]
