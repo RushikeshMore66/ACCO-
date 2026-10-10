@@ -14,12 +14,23 @@ from app.models.collection_workflow import (
     CollectionMessage,
     PaymentPromise,
     CollectionDispute,
-    CollectionActivity
+    CollectionActivity,
 )
+from app.models.reply_analysis import CustomerReplyAnalysis
 
 __all__ = [
-    "Base", "Organization", "User", "Customer", "Invoice", 
-    "Payment", "PaymentAllocation", "PaymentReversal", 
-    "CollectionPolicy", "CollectionMessage", "PaymentPromise", 
-    "CollectionDispute", "CollectionActivity"
+    "Base",
+    "Organization",
+    "User",
+    "Customer",
+    "Invoice",
+    "Payment",
+    "PaymentAllocation",
+    "PaymentReversal",
+    "CollectionPolicy",
+    "CollectionMessage",
+    "PaymentPromise",
+    "CollectionDispute",
+    "CollectionActivity",
+    "CustomerReplyAnalysis",
 ]

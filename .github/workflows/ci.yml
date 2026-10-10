@@ -1,0 +1,61 @@
+name: Backend CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, agent-09c-reply-intelligence]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      ACCO_DATABASE_URL: sqlite:///./ci.db
+      ACCO_JWT_SECRET_KEY: ci-only-secret-key-that-is-not-used-outside-tests
+      ACCO_OPENAI_API_KEY: ""
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff
+      - name: Ruff lint (reply analysis changes)
+        run: |
+          ruff check \
+            app/adapters/ai/openai_provider.py \
+            app/api/v1/endpoints/reply_analyses.py \
+            app/core/config.py \
+            app/models/__init__.py \
+            app/models/reply_analysis.py \
+            app/schemas/reply_analysis.py \
+            app/services/customer_reply_intelligence.py \
+            migrations/versions/20261010_06_customer_reply_analyses.py \
+            tests/test_reply_analyses.py
+      - name: Ruff format check (reply analysis changes)
+        run: |
+          ruff format --check \
+            app/adapters/ai/openai_provider.py \
+            app/api/v1/endpoints/reply_analyses.py \
+            app/core/config.py \
+            app/models/__init__.py \
+            app/models/reply_analysis.py \
+            app/schemas/reply_analysis.py \
+            app/services/customer_reply_intelligence.py \
+            migrations/versions/20261010_06_customer_reply_analyses.py \
+            tests/test_reply_analyses.py
+      - name: Run tests without OpenAI network access
+        run: pytest -q

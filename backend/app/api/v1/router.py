@@ -41,6 +41,9 @@ api_router.include_router(promises_disputes.router, prefix="/collections", tags=
 from app.api.v1.endpoints import email_deliveries
 api_router.include_router(email_deliveries.router, prefix="/collections", tags=["email_deliveries"])
 
+from app.api.v1.endpoints import reply_analyses
+api_router.include_router(reply_analyses.router, prefix="/collections", tags=["reply_analyses"])
+
 from app.api.v1.endpoints import webhooks
 api_router.include_router(webhooks.router, prefix="/webhooks", tags=["webhooks"])
 
