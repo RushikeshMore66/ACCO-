@@ -7,69 +7,70 @@ import { communicationsApi } from "@/lib/api/communications.api";
 import { isDemoMode } from "@/lib/api/client";
 import { KpiCard } from "@/components/shared/KpiCard";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { AlertTriangle, Clock, Target, IndianRupee, PieChart, FileText, CheckCircle2, MessageSquare } from "lucide-react";
+import { AlertTriangle, Clock, Target, IndianRupee, PieChart, FileText, CheckCircle2, MessageSquare, AlertCircle } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid, Cell } from "recharts";
 import Link from "next/link";
-import { InvoiceBalanceResponse } from "@/types/receivables";
-
-// Helper for formatting currency
-const formatCurrency = (amount: number, currency = "INR") => {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: currency,
-    maximumFractionDigits: 0,
-  }).format(amount);
-};
+import { useRouter } from "next/navigation";
+import { formatCurrency } from "@/lib/formatting/currency";
 
 export default function DashboardPage() {
-  const { data: summaries, isLoading: isSummaryLoading } = useQuery({
+  const router = useRouter();
+
+  const { data: summaries, isLoading: isSummaryLoading, isError: isSummaryError, refetch: refetchSummary } = useQuery({
     queryKey: ["receivables-summary"],
     queryFn: () => receivablesApi.getSummary(),
   });
 
-  const { data: aging, isLoading: isAgingLoading } = useQuery({
+  const { data: aging, isLoading: isAgingLoading, isError: isAgingError, refetch: refetchAging } = useQuery({
     queryKey: ["receivables-aging"],
     queryFn: () => receivablesApi.getAging(),
   });
 
-  const { data: invoices, isLoading: isInvoicesLoading } = useQuery({
+  const { data: invoices, isLoading: isInvoicesLoading, isError: isInvoicesError, refetch: refetchInvoices } = useQuery({
     queryKey: ["receivables-invoices-recent"],
     queryFn: () => receivablesApi.getInvoices({ limit: 100 }),
   });
 
-  const { data: promises } = useQuery({
+  const { data: promises, isError: isPromisesError } = useQuery({
     queryKey: ["collections-promises"],
     queryFn: () => collectionsApi.listAllPromises(),
     enabled: isDemoMode,
   });
 
-  const { data: analyses } = useQuery({
+  const { data: analyses, isError: isAnalysesError } = useQuery({
     queryKey: ["communications-analyses"],
     queryFn: () => communicationsApi.listAllAnalyses(),
     enabled: isDemoMode,
   });
 
-  // Default to first currency summary (INR in demo)
+  const isLoading = isSummaryLoading || isAgingLoading || isInvoicesLoading;
+  const isError = isSummaryError || isAgingError || isInvoicesError;
+
+  const handleRetry = () => {
+    refetchSummary();
+    refetchAging();
+    refetchInvoices();
+  };
+
   const summary = summaries?.[0];
   const agingReport = aging?.[0];
 
-  const isLoading = isSummaryLoading || isAgingLoading || isInvoicesLoading;
-
-  const bucketLabels = {
+  const bucketLabels: Record<string, string> = {
     "NOT_DUE": "Current",
     "1_30": "1-30 Days",
     "31_60": "31-60 Days",
     "61_90": "61-90 Days",
-    "90_PLUS": "90+ Days"
+    "90_PLUS": "90+ Days",
+    "PAID": "Paid",
   };
 
   const chartData = agingReport?.buckets.map(b => ({
     name: bucketLabels[b.bucket],
     amount: Number(b.outstanding_amount),
-    isOverdue: b.bucket !== "NOT_DUE"
+    isOverdue: b.bucket !== "NOT_DUE",
+    bucketId: b.bucket
   })) || [];
 
-  // Build the priority queue items
   type WorkItem = {
     id: string;
     type: "invoice" | "promise" | "analysis";
@@ -100,7 +101,7 @@ export default function DashboardPage() {
     });
   }
 
-  if (promises && isDemoMode) {
+  if (promises && isDemoMode && !isPromisesError) {
     const pendingPromises = promises.filter(p => p.status === "ACTIVE" || p.status === "MISSED");
     pendingPromises.forEach(p => {
       workItems.push({
@@ -116,7 +117,7 @@ export default function DashboardPage() {
     });
   }
 
-  if (analyses && isDemoMode) {
+  if (analyses && isDemoMode && !isAnalysesError) {
     const pendingAnalyses = analyses.filter(a => a.status === "PENDING_REVIEW");
     pendingAnalyses.forEach(a => {
       workItems.push({
@@ -130,13 +131,29 @@ export default function DashboardPage() {
     });
   }
 
-  // Sort work items: high priority first
   workItems.sort((a, b) => {
     const pScore = { high: 3, medium: 2, low: 1 };
     return pScore[b.priority] - pScore[a.priority];
   });
   
   const displayItems = workItems.slice(0, 6);
+
+  const collectionRate = summary?.total_issued_amount && Number(summary.total_issued_amount) > 0 
+    ? ((Number(summary.total_allocated_amount) / Number(summary.total_issued_amount)) * 100).toFixed(1) + "% of issued"
+    : undefined;
+
+  if (isError) {
+    return (
+      <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto h-[60vh] flex items-center justify-center">
+        <EmptyState
+          icon={AlertCircle}
+          title="Unable to load dashboard"
+          description="We could not connect to the receivables service. Please check your connection and try again."
+          action={{ label: "Retry", onClick: handleRetry }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
@@ -156,7 +173,7 @@ export default function DashboardPage() {
       
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <Link href="/invoices" className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded-lg">
+        <Link href="/invoices" className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded-lg h-full">
           <KpiCard
             title="Total Outstanding"
             value={summary?.total_outstanding_amount}
@@ -166,7 +183,7 @@ export default function DashboardPage() {
             className="hover:border-brand/40 transition-colors cursor-pointer h-full"
           />
         </Link>
-        <Link href="/collections" className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded-lg">
+        <Link href="/collections" className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded-lg h-full">
           <KpiCard
             title="Overdue Amount"
             value={summary?.total_overdue_amount}
@@ -177,7 +194,7 @@ export default function DashboardPage() {
             className="hover:border-red-300 transition-colors cursor-pointer h-full"
           />
         </Link>
-        <Link href="/collections" className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded-lg">
+        <Link href="/collections" className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded-lg h-full">
           <KpiCard
             title="Overdue Invoices"
             value={summary?.overdue_invoices_count}
@@ -194,6 +211,7 @@ export default function DashboardPage() {
             currency={summary?.currency}
             icon={Target}
             highlight="success"
+            period={collectionRate}
             isLoading={isLoading}
             className="h-full"
           />
@@ -234,7 +252,19 @@ export default function DashboardPage() {
                       contentStyle={{ borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                       formatter={(value: any) => [`₹${Number(value).toLocaleString('en-IN')}`, 'Amount']}
                     />
-                    <Bar dataKey="amount" radius={[6, 6, 0, 0]} maxBarSize={60}>
+                    <Bar 
+                      dataKey="amount" 
+                      radius={[6, 6, 0, 0]} 
+                      maxBarSize={60} 
+                      onClick={(data: any) => {
+                        if (data && data.bucketId) {
+                          router.push(`/collections?bucket=${data.bucketId}`);
+                        } else if (data && data.payload && data.payload.bucketId) {
+                          router.push(`/collections?bucket=${data.payload.bucketId}`);
+                        }
+                      }}
+                      className="cursor-pointer hover:opacity-80 transition-opacity"
+                    >
                       {chartData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.isOverdue ? "#D64550" : "#6D43D9"} />
                       ))}
@@ -255,7 +285,7 @@ export default function DashboardPage() {
         <div className="bg-white rounded-[16px] border border-surface-border p-5 shadow-sm flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <AlertTriangle size={18} className="text-status-warning" />
+               <AlertTriangle size={18} className="text-status-warning" />
               <h2 className="text-base font-semibold text-text-primary">Needs Attention</h2>
             </div>
             {isDemoMode && (

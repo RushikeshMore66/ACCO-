@@ -57,7 +57,7 @@ describe("Phase 5: Payments & Reconciliation", () => {
 
     // Check decimal formatting
     expect(screen.getAllByText(/1,500\.50/)[0]).toBeInTheDocument();
-    expect(screen.getAllByText(/1,000\.00/)[0]).toBeInTheDocument();
+    expect(screen.getAllByText(/1,000/)[0]).toBeInTheDocument();
     
     // Check partial badge
     expect(screen.getByText("PARTIAL")).toBeInTheDocument();

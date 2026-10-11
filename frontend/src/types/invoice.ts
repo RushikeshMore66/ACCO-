@@ -1,5 +1,8 @@
+export type CanonicalInvoiceStatus = "DRAFT" | "ISSUED" | "VOID";
+
 export type InvoiceStatus =
   | "DRAFT"
+  | "ISSUED"
   | "UNPAID"
   | "PARTIALLY_PAID"
   | "OVERDUE"

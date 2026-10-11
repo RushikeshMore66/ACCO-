@@ -1,4 +1,4 @@
-export type AgingBucket = "NOT_DUE" | "1_30" | "31_60" | "61_90" | "90_PLUS";
+export type AgingBucket = "NOT_DUE" | "1_30" | "31_60" | "61_90" | "90_PLUS" | "PAID";
 
 export interface InvoiceBalanceResponse {
   invoice_id: string;
@@ -11,6 +11,8 @@ export interface InvoiceBalanceResponse {
   days_overdue: number;
   payment_status: "UNPAID" | "PARTIALLY_PAID" | "PAID";
   aging_bucket: AgingBucket;
+  issue_date?: string;
+  due_date?: string;
 }
 
 export interface ReceivablesSummary {

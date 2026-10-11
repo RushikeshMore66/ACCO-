@@ -21,7 +21,6 @@ function usePageTitle(): string {
     "/invoices": "Invoices",
     "/customers": "Customers",
     "/reports": "Reports",
-    "/reports/intelligence": "Collection Intelligence",
     "/settings/team": "Team & Users",
     "/policies": "Collection Policies",
     "/settings/audit": "Activity & Audit Log",

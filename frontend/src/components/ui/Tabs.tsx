@@ -1,29 +1,69 @@
 "use client";
 
-import * as TabsPrimitive from "@radix-ui/react-tabs";
+import React, { createContext, useContext, useState } from "react";
 import { clsx } from "clsx";
 
-export const Tabs = TabsPrimitive.Root;
+interface TabsContextValue {
+  value: string;
+  onValueChange: (val: string) => void;
+}
 
-interface TabsListProps {
+const TabsContext = createContext<TabsContextValue | null>(null);
+
+interface TabsProps extends React.HTMLAttributes<HTMLDivElement> {
+  value?: string;
+  defaultValue?: string;
+  onValueChange?: (value: string) => void;
+}
+
+export function Tabs({
+  value,
+  defaultValue = "",
+  onValueChange,
+  children,
+  className,
+  ...props
+}: TabsProps) {
+  const [internalValue, setInternalValue] = useState(defaultValue);
+  const activeValue = value !== undefined ? value : internalValue;
+
+  const handleValueChange = (val: string) => {
+    if (value === undefined) {
+      setInternalValue(val);
+    }
+    onValueChange?.(val);
+  };
+
+  return (
+    <TabsContext.Provider value={{ value: activeValue, onValueChange: handleValueChange }}>
+      <div className={clsx("w-full", className)} {...props}>
+        {children}
+      </div>
+    </TabsContext.Provider>
+  );
+}
+
+interface TabsListProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
   className?: string;
 }
 
-export function TabsList({ children, className }: TabsListProps) {
+export function TabsList({ children, className, ...props }: TabsListProps) {
   return (
-    <TabsPrimitive.List
+    <div
+      role="tablist"
       className={clsx(
         "flex items-center gap-0.5 border-b border-surface-border",
         className
       )}
+      {...props}
     >
       {children}
-    </TabsPrimitive.List>
+    </div>
   );
 }
 
-interface TabsTriggerProps {
+interface TabsTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   value: string;
   children: React.ReactNode;
   className?: string;
@@ -35,47 +75,81 @@ export function TabsTrigger({
   children,
   className,
   count,
+  onClick,
+  ...props
 }: TabsTriggerProps) {
+  const ctx = useContext(TabsContext);
+  const isActive = ctx?.value === value;
+
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    ctx?.onValueChange(value);
+    onClick?.(e);
+  };
+
   return (
-    <TabsPrimitive.Trigger
-      value={value}
+    <button
+      type="button"
+      role="tab"
+      aria-selected={isActive}
+      data-state={isActive ? "active" : "inactive"}
+      onClick={handleClick}
       className={clsx(
-        "inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors",
+        "inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors cursor-pointer",
         "text-text-secondary hover:text-text-primary",
         "border-b-2 border-transparent -mb-px",
-        "data-[state=active]:text-brand data-[state=active]:border-brand",
+        isActive
+          ? "text-brand border-brand font-semibold"
+          : "hover:border-surface-border",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-inset",
         className
       )}
+      {...props}
     >
       {children}
       {count !== undefined && (
-        <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full text-xs bg-surface border border-surface-border">
+        <span
+          className={clsx(
+            "inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full text-xs border",
+            isActive
+              ? "bg-brand-lavender text-brand border-brand/20 font-semibold"
+              : "bg-surface text-text-muted border-surface-border"
+          )}
+        >
           {count}
         </span>
       )}
-    </TabsPrimitive.Trigger>
+    </button>
   );
+}
+
+interface TabsContentProps extends React.HTMLAttributes<HTMLDivElement> {
+  value: string;
+  children: React.ReactNode;
+  className?: string;
 }
 
 export function TabsContent({
   value,
   children,
   className,
-}: {
-  value: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
+  ...props
+}: TabsContentProps) {
+  const ctx = useContext(TabsContext);
+  if (!ctx || ctx.value !== value) {
+    return null;
+  }
+
   return (
-    <TabsPrimitive.Content
-      value={value}
+    <div
+      role="tabpanel"
+      tabIndex={0}
       className={clsx(
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand pt-2",
         className
       )}
+      {...props}
     >
       {children}
-    </TabsPrimitive.Content>
+    </div>
   );
 }

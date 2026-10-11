@@ -13,7 +13,6 @@ import {
   AlertTriangle,
   CreditCard,
   BarChart3,
-  Brain,
   UserCog,
   ShieldCheck,
   ClipboardList,
@@ -68,11 +67,6 @@ const navGroups: NavGroup[] = [
     label: "Analytics",
     items: [
       { label: "Reports", href: "/reports", icon: BarChart3 },
-      {
-        label: "Collection Intelligence",
-        href: "/reports/intelligence",
-        icon: Brain,
-      },
     ],
   },
   {

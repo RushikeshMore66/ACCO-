@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/Badge";
 // Invoice statuses from backend InvoiceStatus enum
 type InvoiceStatus =
   | "DRAFT"
+  | "ISSUED"
   | "UNPAID"
   | "PARTIALLY_PAID"
   | "OVERDUE"
@@ -45,6 +46,7 @@ const invoiceStatusConfig: Record<
   { label: string; variant: "success" | "warning" | "error" | "info" | "muted" | "purple" | "default" }
 > = {
   DRAFT: { label: "Draft", variant: "muted" },
+  ISSUED: { label: "Issued", variant: "info" },
   UNPAID: { label: "Unpaid", variant: "info" },
   PARTIALLY_PAID: { label: "Partial", variant: "warning" },
   OVERDUE: { label: "Overdue", variant: "error" },
