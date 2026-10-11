@@ -12,6 +12,7 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/DropdownMenu";
 import { TeamPresence } from "./TeamPresence";
+import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 import Link from "next/link";
 import { clsx } from "clsx";
 import { useRouter } from "next/navigation";
@@ -104,43 +105,7 @@ export function TopBar({ title, breadcrumb }: TopBarProps) {
       <TeamPresence />
 
       {/* Notifications */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            className="relative flex items-center justify-center w-8 h-8 rounded-md text-text-secondary hover:bg-surface hover:text-text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-            aria-label="Notifications (3 unread)"
-          >
-            <Bell size={16} aria-hidden />
-            <span
-              className="absolute top-1 right-1 w-2 h-2 bg-status-error rounded-full"
-              aria-hidden
-            />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-80">
-          <DropdownMenuLabel className="flex justify-between items-center w-full">
-            <span>Notifications</span>
-            <span className="text-[10px] font-normal text-status-warning bg-status-warning-bg px-1.5 py-0.5 rounded border border-status-warning/20">Demo Mode</span>
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => router.push('/collections/payments')} className="flex flex-col items-start p-3 cursor-pointer">
-            <span className="text-sm font-medium text-text-primary">New payment of 1,500.00 INR recorded.</span>
-            <span className="text-xs text-text-muted mt-1">10 mins ago</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => router.push('/communications')} className="flex flex-col items-start p-3 cursor-pointer">
-            <span className="text-sm font-medium text-text-primary">Customer Action: Promise to pay confirmed.</span>
-            <span className="text-xs text-text-muted mt-1">1 hour ago</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => router.push('/invoices')} className="flex flex-col items-start p-3 cursor-pointer">
-            <span className="text-sm font-medium text-text-primary">Invoice #INV-240 is now overdue.</span>
-            <span className="text-xs text-text-muted mt-1">2 days ago</span>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <div className="p-2 text-center">
-            <button className="text-xs text-brand font-medium hover:underline focus:outline-none">Mark all as read</button>
-          </div>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <NotificationCenter />
 
       {/* Demo mode badge */}
       {isDemoMode && (

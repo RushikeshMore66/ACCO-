@@ -138,8 +138,8 @@ export default function DashboardPage() {
   
   const displayItems = workItems.slice(0, 6);
 
-  const collectionRate = summary?.total_issued_amount && Number(summary.total_issued_amount) > 0 
-    ? ((Number(summary.total_allocated_amount) / Number(summary.total_issued_amount)) * 100).toFixed(1) + "% of issued"
+  const allocatedPortfolioRatio = summary?.total_issued_amount && Number(summary.total_issued_amount) > 0 
+    ? ((Number(summary.total_allocated_amount) / Number(summary.total_issued_amount)) * 100).toFixed(1) + "% of issued value"
     : undefined;
 
   if (isError) {
@@ -206,12 +206,13 @@ export default function DashboardPage() {
         </Link>
         <div className="block h-full">
           <KpiCard
-            title="Total Collected"
+            title="Allocated / Issued Portfolio"
             value={summary?.total_allocated_amount}
             currency={summary?.currency}
             icon={Target}
             highlight="success"
-            period={collectionRate}
+            period={allocatedPortfolioRatio}
+            description="Recorded allocations as a share of issued invoice value. This is a cumulative portfolio ratio, not a period-specific collection rate."
             isLoading={isLoading}
             className="h-full"
           />

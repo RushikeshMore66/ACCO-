@@ -77,6 +77,12 @@ describe("DashboardPage", () => {
 
     const overdueCount = await screen.findByText("10");
     expect(overdueCount).toBeInTheDocument();
+
+    const allocatedKpi = await screen.findByText("Allocated / Issued Portfolio");
+    expect(allocatedKpi).toBeInTheDocument();
+    expect(
+      screen.getByText(/Recorded allocations as a share of issued invoice value\. This is a cumulative portfolio ratio, not a period-specific collection rate\./i)
+    ).toBeInTheDocument();
   });
 
   it("renders priority work queue items", async () => {

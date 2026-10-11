@@ -13,6 +13,8 @@ interface KpiCardProps {
   trend?: number;
   /** Context label: "vs last month", "this week", etc. */
   period?: string;
+  /** Explanatory description or methodology note */
+  description?: string;
   /** Optional icon */
   icon?: LucideIcon;
   /** Optional highlight color override */
@@ -28,6 +30,7 @@ export function KpiCard({
   isCurrency = true,
   trend,
   period,
+  description,
   icon: Icon,
   highlight,
   isLoading = false,
@@ -128,6 +131,15 @@ export function KpiCard({
             <span className="text-xs text-text-muted">{period}</span>
           )}
         </div>
+      )}
+
+      {trend === undefined && period && (
+        <span className="text-xs text-text-muted mt-0.5">{period}</span>
+      )}
+      {description && (
+        <span className="text-[11px] text-text-secondary mt-0.5 leading-snug" title={description}>
+          {description}
+        </span>
       )}
     </div>
   );
