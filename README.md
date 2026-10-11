@@ -10,7 +10,9 @@ ACCO is built as a **modular monolith** emphasizing financial accuracy, tenant i
 
 - **Backend**: Python 3.11+, FastAPI, Pydantic Settings, SQLAlchemy 2.x, PostgreSQL, Alembic, Celery, Redis.
 - **Frontend**: Next.js (App Router), TypeScript, Tailwind CSS.
-- **Infrastructure**: Docker Compose (PostgreSQL 16, Redis 7, Backend API).
+- **Backend**: Python 3.11+, FastAPI, Pydantic Settings, SQLAlchemy 2.x, PostgreSQL, Alembic, Celery, Redis.
+- **Frontend**: Next.js (App Router), TypeScript, Tailwind CSS.
+- **Development**: Native local setup (FastAPI on Uvicorn, Next.js dev server, local PostgreSQL 16).
 - **Core Rules**:
   - `Decimal` / `NUMERIC` representation for all monetary balances.
   - Multi-tenant isolation at database query and service layers.
@@ -23,59 +25,102 @@ ACCO is built as a **modular monolith** emphasizing financial accuracy, tenant i
 
 ```
 .
-├── backend/            # FastAPI REST API & worker services
+├── backend/            # FastAPI REST API, Alembic migrations & test suites
 ├── frontend/           # Next.js App Router front-end
 ├── docs/               # Architecture, domain models, and API specs
-├── scripts/            # Development and verification scripts
-├── docker-compose.yml  # Local multi-container development environment
+├── scripts/            # Development and verification scripts (PowerShell)
 └── CLAUDE.md           # Architecture guidelines and conventions
 ```
 
 ---
 
-## Quickstart
+## Native Local Development Setup
 
 ### 1. Prerequisites
-- Docker & Docker Compose
-- Python 3.11+
-- Node.js 18+ & npm
+- **Python 3.11+**
+- **Node.js 18+ & npm**
+- **PostgreSQL 16+** installed and running locally
 
-### 2. Environment Setup
-Copy the example environment configuration:
-```bash
-cp .env.example .env
+### 2. Database Setup (Local PostgreSQL)
+Create the local development database and user using `psql` or `createdb`:
+```sql
+CREATE DATABASE acco_db;
+CREATE USER acco_user WITH ENCRYPTED PASSWORD 'change_me';
+GRANT ALL PRIVILEGES ON DATABASE acco_db TO acco_user;
 ```
 
-### 3. Local Development with Docker Compose
-Start PostgreSQL, Redis, and the backend service:
-```bash
-docker compose up -d
-```
+### 3. Backend Setup
+1. Navigate to the backend directory:
+   ```bash
+   cd backend
+   ```
+2. Create and activate a Python virtual environment:
+   ```powershell
+   # Windows PowerShell:
+   python -m venv venv
+   .\venv\Scripts\Activate.ps1
+   # Linux/macOS:
+   python -m venv venv
+   source venv/bin/activate
+   ```
+3. Install dependencies:
+   ```bash
+   pip install -e .
+   ```
+4. Configure environment variables:
+   ```powershell
+   # Copy backend/.env.example to backend/.env
+   cp .env.example .env
+   ```
+   Ensure `ACCO_DATABASE_URL` matches your local PostgreSQL credentials:
+   ```env
+   ACCO_DATABASE_URL="postgresql+psycopg://acco_user:change_me@localhost:5432/acco_db"
+   ```
+5. Apply database migrations:
+   ```bash
+   alembic upgrade head
+   ```
+6. Start the FastAPI development server:
+   ```bash
+   uvicorn app.main:app --reload --port 8000
+   ```
+   Interactive Swagger docs are accessible at: `http://localhost:8000/docs`
 
-### 4. Running Backend Locally
-Navigate to the backend directory, activate your virtual environment, and run:
-```bash
-cd backend
-python -m venv venv
-# On Windows:
-venv\Scripts\activate
-# On Linux/macOS:
-source venv/bin/activate
+### 4. Frontend Setup
+1. Navigate to the frontend directory:
+   ```bash
+   cd frontend
+   ```
+2. Install Node dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the Next.js development server:
+   ```bash
+   npm run dev
+   ```
+   The application will be available at: `http://localhost:3000`
 
-pip install -e .
-uvicorn app.main:app --reload --port 8000
-```
-API Documentation will be accessible at: `http://localhost:8000/docs`
-
-### 5. Running Tests
-```bash
-cd backend
-pytest
-```
+### 5. Running Tests & Quality Checks
+- **Backend Tests & Linting**:
+  ```powershell
+  cd backend
+  pytest
+  ruff check .
+  ```
+- **Frontend Tests, Typecheck & Build**:
+  ```powershell
+  cd frontend
+  npm test
+  npm run typecheck
+  npm run lint
+  npm run build
+  ```
 
 ---
 
-## Verification Scripts (PowerShell)
+## Convenience Scripts (PowerShell)
 
-- **Start Dev Environment**: `.\scripts\dev.ps1`
-- **Run Linting & Tests**: `.\scripts\check.ps1`
+- **Start Dev Environment**: `.\scripts\dev.ps1` (instructions/launcher for local frontend and backend)
+- **Run Linting & Tests**: `.\scripts\check.ps1` (runs pytest, ruff, npm test, typecheck, lint, build)
+
