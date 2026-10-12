@@ -20,9 +20,14 @@ from app.services.inbound_email_service import (
 router = APIRouter()
 
 
+async def get_raw_body(request: Request) -> bytes:
+    return await request.body()
+
+
 @router.post("/email/inbound", status_code=status.HTTP_200_OK)
-async def inbound_email_webhook(
+def inbound_email_webhook(
     request: Request,
+    body_bytes: bytes = Depends(get_raw_body),
     db: Session = Depends(get_db),
     provider_factory: Callable[[], ReplyExtractionProvider] = Depends(get_reply_provider_factory),
 ):
@@ -31,7 +36,6 @@ async def inbound_email_webhook(
     Validates signature, deduplicates events, safely matches customer/invoice/thread,
     persists inbound collection message, and triggers advisory AI reply analysis.
     """
-    body_bytes = await request.body()
     headers_dict = dict(request.headers)
 
     try:
@@ -55,8 +59,9 @@ async def inbound_email_webhook(
 
 
 @router.post("/email/resend", status_code=status.HTTP_200_OK)
-async def resend_webhook(
+def resend_webhook(
     request: Request,
+    body_bytes: bytes = Depends(get_raw_body),
     db: Session = Depends(get_db),
     provider_factory: Callable[[], ReplyExtractionProvider] = Depends(get_reply_provider_factory),
 ):
@@ -64,7 +69,6 @@ async def resend_webhook(
     Existing Resend webhook endpoint. Handles delivery status events (delivered, bounced, complained)
     and transparently routes inbound customer replies (email.received) to the inbound pipeline.
     """
-    body_bytes = await request.body()
     headers_dict = dict(request.headers)
     svix_id = headers_dict.get("svix-id") or headers_dict.get("webhook-id")
     svix_timestamp = headers_dict.get("svix-timestamp") or headers_dict.get("webhook-timestamp")
