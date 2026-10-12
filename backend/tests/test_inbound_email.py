@@ -35,8 +35,6 @@ from app.models.organization import Organization
 from app.models.reply_analysis import AnalysisStatus, CustomerReplyAnalysis, ReplyClassification
 from app.models.user import User
 from app.schemas.reply_analysis import LLMExtractionResult
-from app.services.inbound_email_service import verify_svix_signature
-
 
 TEST_SIGNING_SECRET = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw"
 
@@ -85,7 +83,7 @@ def make_svix_headers(
         timestamp = int(time.time())
 
     key = base64.b64decode(secret[6:]) if secret.startswith("whsec_") else secret.encode("utf-8")
-    to_sign = f"{event_id}.{timestamp}.".encode("utf-8") + body_bytes
+    to_sign = f"{event_id}.{timestamp}.".encode() + body_bytes
     digest = hmac.new(key, to_sign, hashlib.sha256).digest()
     sig_b64 = base64.b64encode(digest).decode("utf-8")
 

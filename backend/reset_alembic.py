@@ -1,4 +1,5 @@
 import psycopg
+
 conn = psycopg.connect('postgresql://postgres:9067717776@localhost:5432/acco_db', connect_timeout=5, autocommit=True)
 cur = conn.cursor()
 

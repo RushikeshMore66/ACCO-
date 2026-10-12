@@ -1,5 +1,5 @@
-from typing import Any, List
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -35,7 +35,7 @@ def create_customer(
     return customer
 
 
-@router.get("", response_model=List[CustomerResponse])
+@router.get("", response_model=list[CustomerResponse])
 def list_customers(
     db: Session = Depends(get_db),
     limit: int = 100,

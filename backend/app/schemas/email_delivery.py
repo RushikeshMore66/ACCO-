@@ -1,8 +1,10 @@
 import uuid
 from datetime import datetime
-from typing import Optional
+
 from pydantic import BaseModel, ConfigDict
+
 from app.models.email_delivery import DeliveryStatus
+
 
 class EmailDeliveryResponse(BaseModel):
     id: uuid.UUID
@@ -15,15 +17,15 @@ class EmailDeliveryResponse(BaseModel):
     subject_snapshot: str
     status: DeliveryStatus
     attempt_count: int
-    next_attempt_at: Optional[datetime]
-    last_error_code: Optional[str]
-    last_error_summary: Optional[str]
+    next_attempt_at: datetime | None
+    last_error_code: str | None
+    last_error_summary: str | None
     created_at: datetime
     updated_at: datetime
-    accepted_at: Optional[datetime]
-    delivered_at: Optional[datetime]
-    bounced_at: Optional[datetime]
-    complained_at: Optional[datetime]
-    blocked_at: Optional[datetime]
+    accepted_at: datetime | None
+    delivered_at: datetime | None
+    bounced_at: datetime | None
+    complained_at: datetime | None
+    blocked_at: datetime | None
     
     model_config = ConfigDict(from_attributes=True)

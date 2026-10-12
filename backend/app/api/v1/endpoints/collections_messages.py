@@ -1,19 +1,27 @@
 import uuid
-from datetime import datetime, UTC
-from typing import List
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_roles
-from app.models.user import User, UserRole
-from app.models.invoice import Invoice, InvoiceStatus
 from app.models.collection_workflow import (
-    CollectionMessage, CollectionActivity, MessageDirection, 
-    MessageChannel, MessageStatus, EventType
+    CollectionActivity,
+    CollectionMessage,
+    EventType,
+    MessageChannel,
+    MessageDirection,
+    MessageStatus,
 )
+from app.models.invoice import Invoice, InvoiceStatus
+from app.models.user import User, UserRole
 from app.schemas.collection_messages import (
-    MessageCreate, MessageUpdate, MessageReject, MessageResponse, TimelineEvent
+    MessageCreate,
+    MessageReject,
+    MessageResponse,
+    MessageUpdate,
+    TimelineEvent,
 )
 
 router = APIRouter()
@@ -237,7 +245,7 @@ def record_note(
     db.refresh(msg)
     return msg
 
-@router.get("/messages", response_model=List[MessageResponse])
+@router.get("/messages", response_model=list[MessageResponse])
 def list_all_messages(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.OWNER, UserRole.FINANCE_MANAGER, UserRole.COLLECTOR, UserRole.VIEWER])),
@@ -266,7 +274,7 @@ def list_all_messages(
     ).all()
     return messages
 
-@router.get("/invoices/{invoice_id}/messages", response_model=List[MessageResponse])
+@router.get("/invoices/{invoice_id}/messages", response_model=list[MessageResponse])
 def list_messages(
     invoice_id: uuid.UUID,
     db: Session = Depends(get_db),
@@ -279,7 +287,7 @@ def list_messages(
     ).all()
     return messages
 
-@router.get("/invoices/{invoice_id}/timeline", response_model=List[TimelineEvent])
+@router.get("/invoices/{invoice_id}/timeline", response_model=list[TimelineEvent])
 def get_timeline(
     invoice_id: uuid.UUID,
     db: Session = Depends(get_db),

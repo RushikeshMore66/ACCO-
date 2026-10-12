@@ -1,6 +1,8 @@
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
+
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
+
 
 def test_receivables_summary_and_aging(client: TestClient, db_session: Session, normal_user_token_headers: dict[str, str]):
     # 1. Customer

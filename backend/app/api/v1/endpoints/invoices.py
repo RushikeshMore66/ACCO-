@@ -1,14 +1,14 @@
-from datetime import datetime, UTC
-from typing import Any, List
 import uuid
+from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
-from app.models.invoice import Invoice, InvoiceStatus
 from app.models.customer import Customer
+from app.models.invoice import Invoice, InvoiceStatus
 from app.models.user import User
 from app.schemas.invoice import InvoiceCreate, InvoiceResponse, InvoiceUpdate, InvoiceVoid
 from app.schemas.receivables import InvoiceBalanceResponse
@@ -56,7 +56,7 @@ def create_invoice(
     db.refresh(invoice)
     return invoice
 
-@router.get("", response_model=List[InvoiceResponse])
+@router.get("", response_model=list[InvoiceResponse])
 def list_invoices(
     db: Session = Depends(get_db),
     limit: int = 100,
@@ -241,6 +241,7 @@ from app.schemas.invoice import (
     InvoiceImportBatchResponse,
     InvoiceImportBatchResultItem,
 )
+
 
 @router.post("/import", response_model=InvoiceImportBatchResponse, status_code=status.HTTP_200_OK)
 def import_invoices_batch(

@@ -1,12 +1,13 @@
+
 import httpx
-from typing import Optional
 from pydantic import BaseModel
+
 
 class EmailSendResult(BaseModel):
     success: bool
-    provider_message_id: Optional[str] = None
-    error_code: Optional[str] = None
-    error_summary: Optional[str] = None
+    provider_message_id: str | None = None
+    error_code: str | None = None
+    error_summary: str | None = None
     is_transient: bool = False
 
 class EmailProvider:

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.adapters.ai.openai_provider import OpenAIProviderAdapter, ReplyExtractionProvider
+from app.adapters.ai.openai_provider import ReplyExtractionProvider
 from app.api.deps import get_db
 from app.api.v1.endpoints.reply_analyses import get_reply_provider_factory
 from app.core.config import settings
@@ -50,7 +50,7 @@ def inbound_email_webhook(
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from None
     except HTTPException:
         raise
-    except Exception as unk_exc:
+    except Exception:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -15,9 +15,10 @@ import logging
 import re
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Callable, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -121,7 +122,7 @@ def verify_svix_signature(
         key = secret_value.encode("utf-8")
 
     # Construct signed payload
-    to_sign = f"{svix_id}.{svix_timestamp}.".encode("utf-8") + body_bytes
+    to_sign = f"{svix_id}.{svix_timestamp}.".encode() + body_bytes
     computed_digest = hmac.new(key, to_sign, hashlib.sha256).digest()
     computed_b64 = base64.b64encode(computed_digest).decode("utf-8")
     expected_v1 = f"v1,{computed_b64}"

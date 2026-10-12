@@ -1,21 +1,29 @@
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_roles
-from app.models.user import User, UserRole
-from app.models.collection_workflow import CollectionMessage, MessageStatus, MessageDirection, MessageChannel
-from app.models.email_delivery import EmailDelivery, DeliveryStatus
-from app.schemas.email_delivery import EmailDeliveryResponse
-from app.services.receivables import get_invoice_balance
-from app.services.collection_pause_service import evaluate_pause_conditions
-from app.models.invoice import Invoice, InvoiceStatus
-
-from app.models.customer import Customer
 from app.models.collection_policy import CollectionPolicy
-from app.models.collection_workflow import CollectionDispute, PaymentPromise, DisputeStatus, PromiseStatus
+from app.models.collection_workflow import (
+    CollectionDispute,
+    CollectionMessage,
+    DisputeStatus,
+    MessageChannel,
+    MessageDirection,
+    MessageStatus,
+    PaymentPromise,
+    PromiseStatus,
+)
+from app.models.customer import Customer
+from app.models.email_delivery import DeliveryStatus, EmailDelivery
+from app.models.invoice import Invoice, InvoiceStatus
+from app.models.user import User, UserRole
+from app.schemas.email_delivery import EmailDeliveryResponse
+from app.services.collection_pause_service import evaluate_pause_conditions
+from app.services.receivables import get_invoice_balance
 
 router = APIRouter()
 

@@ -1,25 +1,34 @@
 import uuid
-from datetime import datetime, UTC, timedelta
-from typing import List
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_roles
-from app.models.user import User, UserRole
+from app.models.collection_workflow import (
+    CollectionActivity,
+    CollectionDispute,
+    DisputeStatus,
+    EventType,
+    PaymentPromise,
+    PromiseStatus,
+)
 from app.models.invoice import Invoice, InvoiceStatus
 from app.models.payment import Payment
 from app.models.payment_allocation import PaymentAllocation
 from app.models.payment_reversal import PaymentReversal
-from app.models.collection_workflow import (
-    PaymentPromise, CollectionDispute, CollectionActivity, 
-    PromiseStatus, DisputeStatus, EventType
-)
-from app.models.reply_analysis import CustomerReplyAnalysis, AnalysisStatus, ReplyClassification
+from app.models.reply_analysis import AnalysisStatus, CustomerReplyAnalysis, ReplyClassification
+from app.models.user import User, UserRole
 from app.schemas.promises_disputes import (
-    PromiseCreate, PromiseCancel, PromiseResponse, 
-    DisputeCreate, DisputeResolve, DisputeReject, DisputeResponse
+    DisputeCreate,
+    DisputeReject,
+    DisputeResolve,
+    DisputeResponse,
+    PromiseCancel,
+    PromiseCreate,
+    PromiseResponse,
 )
 from app.services.receivables import get_invoice_balance
 
@@ -132,7 +141,7 @@ def create_promise(
     db.refresh(promise)
     return promise
 
-@router.get("/promises", response_model=List[PromiseResponse])
+@router.get("/promises", response_model=list[PromiseResponse])
 def list_all_promises(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.OWNER, UserRole.FINANCE_MANAGER, UserRole.COLLECTOR, UserRole.VIEWER])),
@@ -157,7 +166,7 @@ def list_all_promises(
     ).all()
     return promises
 
-@router.get("/invoices/{invoice_id}/promises", response_model=List[PromiseResponse])
+@router.get("/invoices/{invoice_id}/promises", response_model=list[PromiseResponse])
 def get_promises(
     invoice_id: uuid.UUID,
     db: Session = Depends(get_db),
@@ -301,7 +310,7 @@ def create_dispute(
     db.refresh(dispute)
     return dispute
 
-@router.get("/disputes", response_model=List[DisputeResponse])
+@router.get("/disputes", response_model=list[DisputeResponse])
 def list_all_disputes(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.OWNER, UserRole.FINANCE_MANAGER, UserRole.COLLECTOR, UserRole.VIEWER])),
@@ -327,7 +336,7 @@ def list_all_disputes(
     ).all()
     return disputes
 
-@router.get("/invoices/{invoice_id}/disputes", response_model=List[DisputeResponse])
+@router.get("/invoices/{invoice_id}/disputes", response_model=list[DisputeResponse])
 def get_disputes(
     invoice_id: uuid.UUID,
     db: Session = Depends(get_db),

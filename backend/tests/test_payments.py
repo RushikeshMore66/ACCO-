@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, UTC, date
+from datetime import UTC, date, datetime
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
