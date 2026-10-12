@@ -32,6 +32,16 @@ class Settings(BaseSettings):
     reply_analysis_max_input_chars: int = Field(default=12000, ge=100, le=50000)
     reply_analysis_prompt_version: str = "reply-v1"
 
+    # Worker & Background Tasks
+    celery_broker_url: str = "memory://"
+    celery_result_backend: str = "cache+memory://"
+    business_timezone: str = "UTC"
+
+    # Email provider configuration
+    resend_api_key: SecretStr | None = None
+    resend_from_email: str = "billing@acco.app"
+    email_webhook_signing_secret: SecretStr | None = None
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

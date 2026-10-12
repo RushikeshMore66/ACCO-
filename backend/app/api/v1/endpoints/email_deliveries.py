@@ -13,6 +13,10 @@ from app.services.receivables import get_invoice_balance
 from app.services.collection_pause_service import evaluate_pause_conditions
 from app.models.invoice import Invoice, InvoiceStatus
 
+from app.models.customer import Customer
+from app.models.collection_policy import CollectionPolicy
+from app.models.collection_workflow import CollectionDispute, PaymentPromise, DisputeStatus, PromiseStatus
+
 router = APIRouter()
 
 @router.post("/messages/{message_id}/deliveries", response_model=EmailDeliveryResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -44,10 +48,13 @@ def enqueue_delivery(
     if existing:
         raise HTTPException(status_code=409, detail="Delivery already exists for this message")
         
-    # Load invoice and check eligibility
+    # Load invoice with tenant isolation and check eligibility
     invoice = db.scalar(
         select(Invoice)
-        .where(Invoice.id == message.invoice_id)
+        .where(
+            Invoice.id == message.invoice_id,
+            Invoice.organization_id == current_user.organization_id
+        )
     )
     if not invoice or invoice.status != InvoiceStatus.ISSUED:
         raise HTTPException(status_code=409, detail="Invoice is not ISSUED")
@@ -56,21 +63,57 @@ def enqueue_delivery(
     if balance.outstanding_amount <= 0:
         raise HTTPException(status_code=409, detail="Invoice is fully paid")
         
+    # Load customer to resolve verified recipient email
+    customer = db.scalar(
+        select(Customer)
+        .where(
+            Customer.id == message.customer_id,
+            Customer.organization_id == current_user.organization_id
+        )
+    )
+    if not customer or not customer.email:
+        raise HTTPException(status_code=400, detail="Customer has no valid recipient email address configured")
+
+    # Load organization collection policy
+    policy = db.scalar(
+        select(CollectionPolicy)
+        .where(CollectionPolicy.organization_id == current_user.organization_id)
+    )
+
+    # Load active disputes and promises for this invoice
+    disputes = db.scalars(
+        select(CollectionDispute)
+        .where(
+            CollectionDispute.invoice_id == invoice.id,
+            CollectionDispute.organization_id == current_user.organization_id,
+            CollectionDispute.status.in_([DisputeStatus.OPEN, DisputeStatus.UNDER_REVIEW])
+        )
+    ).all()
+
+    promises = db.scalars(
+        select(PaymentPromise)
+        .where(
+            PaymentPromise.invoice_id == invoice.id,
+            PaymentPromise.organization_id == current_user.organization_id,
+            PaymentPromise.status == PromiseStatus.ACTIVE
+        )
+    ).all()
+
     # Check pause conditions
-    # For a real implementation, we would load the active disputes and promises here and pass to evaluate_pause_conditions
-    pause_eval = evaluate_pause_conditions(None, [], [], datetime.now(UTC))
+    pause_eval = evaluate_pause_conditions(policy, list(disputes), list(promises), datetime.now(UTC))
     if pause_eval.is_paused:
-        raise HTTPException(status_code=409, detail="Collection is currently paused")
+        reasons_str = ", ".join(pause_eval.pause_reasons)
+        raise HTTPException(status_code=409, detail=f"Collection outreach is paused ({reasons_str})")
         
-    # Create the delivery
+    # Create the delivery with snapshot of customer's verified email
     delivery = EmailDelivery(
         organization_id=message.organization_id,
         collection_message_id=message.id,
         invoice_id=message.invoice_id,
         customer_id=message.customer_id,
-        idempotency_key=str(uuid.uuid4()), # Generate unique stable key
-        recipient_email="placeholder@example.com", # In real app, load customer's email or use message snapshot
-        subject_snapshot=message.subject,
+        idempotency_key=str(uuid.uuid4()),
+        recipient_email=customer.email,
+        subject_snapshot=message.subject or f"Payment Reminder: Invoice {invoice.invoice_number}",
         body_snapshot=message.body,
         status=DeliveryStatus.QUEUED
     )

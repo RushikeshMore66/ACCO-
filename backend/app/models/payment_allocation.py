@@ -50,8 +50,8 @@ class PaymentAllocation(Base):
     )
 
     organization: Mapped["Organization"] = relationship("Organization", foreign_keys=[organization_id], overlaps="allocations")
-    payment: Mapped["Payment"] = relationship("Payment", back_populates="allocations", primaryjoin="and_(PaymentAllocation.organization_id==Payment.organization_id, PaymentAllocation.payment_id==Payment.id, PaymentAllocation.customer_id==Payment.customer_id)", overlaps="allocations,organization,payment")
-    invoice: Mapped["Invoice"] = relationship("Invoice", back_populates="allocations", primaryjoin="and_(PaymentAllocation.organization_id==Invoice.organization_id, PaymentAllocation.invoice_id==Invoice.id, PaymentAllocation.customer_id==Invoice.customer_id)", overlaps="allocations,organization,invoice")
+    payment: Mapped["Payment"] = relationship("Payment", back_populates="allocations", primaryjoin="and_(PaymentAllocation.organization_id==Payment.organization_id, PaymentAllocation.payment_id==Payment.id, PaymentAllocation.customer_id==Payment.customer_id)", overlaps="allocations,organization,payment,invoice")
+    invoice: Mapped["Invoice"] = relationship("Invoice", back_populates="allocations", primaryjoin="and_(PaymentAllocation.organization_id==Invoice.organization_id, PaymentAllocation.invoice_id==Invoice.id, PaymentAllocation.customer_id==Invoice.customer_id)", overlaps="allocations,organization,invoice,payment")
     created_by: Mapped["User"] = relationship("User", foreign_keys=[created_by_user_id])
 
     __table_args__ = (

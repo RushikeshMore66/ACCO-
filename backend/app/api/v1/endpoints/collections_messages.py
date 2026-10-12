@@ -237,6 +237,35 @@ def record_note(
     db.refresh(msg)
     return msg
 
+@router.get("/messages", response_model=List[MessageResponse])
+def list_all_messages(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles([UserRole.OWNER, UserRole.FINANCE_MANAGER, UserRole.COLLECTOR, UserRole.VIEWER])),
+    customer_id: uuid.UUID | None = None,
+    invoice_id: uuid.UUID | None = None,
+    direction: MessageDirection | None = None,
+    channel: MessageChannel | None = None,
+    status: MessageStatus | None = None,
+    limit: int = 100,
+    offset: int = 0,
+):
+    stmt = select(CollectionMessage).where(CollectionMessage.organization_id == current_user.organization_id)
+    if customer_id:
+        stmt = stmt.where(CollectionMessage.customer_id == customer_id)
+    if invoice_id:
+        stmt = stmt.where(CollectionMessage.invoice_id == invoice_id)
+    if direction:
+        stmt = stmt.where(CollectionMessage.direction == direction)
+    if channel:
+        stmt = stmt.where(CollectionMessage.channel == channel)
+    if status:
+        stmt = stmt.where(CollectionMessage.status == status)
+
+    messages = db.scalars(
+        stmt.order_by(CollectionMessage.created_at.desc()).offset(offset).limit(limit)
+    ).all()
+    return messages
+
 @router.get("/invoices/{invoice_id}/messages", response_model=List[MessageResponse])
 def list_messages(
     invoice_id: uuid.UUID,

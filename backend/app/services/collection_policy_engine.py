@@ -1,4 +1,5 @@
 from datetime import datetime, UTC
+from typing import Any
 
 from app.models.collection_policy import CollectionPolicy
 from app.schemas.collections import ReceivableItemResponse
@@ -29,11 +30,14 @@ def evaluate_collection_status(
     invoice_balance: InvoiceBalanceResponse,
     policy: CollectionPolicy | None,
     customer_name: str,
-    as_of_date: datetime | None = None
+    as_of_date: datetime | None = None,
+    disputes: list[Any] | None = None,
+    promises: list[Any] | None = None,
 ) -> ReceivableItemResponse | None:
     """
     Evaluates an invoice balance and returns its collection stage and recommended action.
     Returns None if the invoice is not eligible for active collection (e.g. fully paid, not issued).
+    Prioritizes active disputes and active payment promises to prevent inappropriate chasing.
     """
     if as_of_date is None:
         as_of_date = datetime.now(UTC)
@@ -46,12 +50,34 @@ def evaluate_collection_status(
 
     days_overdue = calculate_days_overdue(invoice_balance.due_date, as_of_date)
     eff_policy = get_effective_policy(policy)
-    
-    stage = ""
-    action = ""
-    reason = ""
-    
-    if days_overdue == 0:
+
+    # Check pause conditions first
+    from app.services.collection_pause_service import evaluate_pause_conditions
+    pause_eval = evaluate_pause_conditions(
+        policy, 
+        disputes or [], 
+        promises or [], 
+        as_of_date
+    )
+
+    if pause_eval.is_paused:
+        if "DISPUTE" in pause_eval.pause_reasons:
+            stage = "PAUSED_DISPUTE"
+            action = "RESOLVE_DISPUTE_FIRST"
+            reason = f"Active dispute under review ({pause_eval.active_dispute_count} open). Collection outreach suppressed."
+        elif "PAYMENT_PROMISE" in pause_eval.pause_reasons:
+            stage = "PAUSED_PROMISE"
+            action = "AWAIT_PROMISE_DATE"
+            reason = f"Customer has an active payment commitment ({pause_eval.active_promise_count} active). Collection outreach paused until commitment date."
+        else:
+            stage = "PAUSED"
+            action = "REVIEW_COLLECTION_HOLD"
+            reason = "Collection paused by organizational policy."
+    elif pause_eval.requires_follow_up:
+        stage = "BROKEN_PROMISE_FOLLOWUP"
+        action = "FOLLOW_UP_MISSED_PROMISE"
+        reason = "Customer promised payment date has passed without qualifying receipt. Follow-up required."
+    elif days_overdue == 0:
         stage = "NOT_DUE"
         action = "WAIT_UNTIL_DUE"
         reason = "Invoice is not yet overdue."

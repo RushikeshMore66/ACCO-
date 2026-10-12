@@ -25,7 +25,10 @@ def evaluate_pause_conditions(
 
     as_of_date_only = as_of_date.date()
 
-    if policy and policy.pause_collection_on_dispute:
+    pause_on_dispute = policy.pause_collection_on_dispute if policy is not None else True
+    pause_on_promise = policy.pause_collection_on_payment_promise if policy is not None else True
+
+    if pause_on_dispute:
         for d in disputes:
             if d.status in (DisputeStatus.OPEN, DisputeStatus.UNDER_REVIEW):
                 active_dispute_count += 1
@@ -39,8 +42,10 @@ def evaluate_pause_conditions(
                 active_promise_count += 1
             else:
                 requires_follow_up = True
+        elif p.status == PromiseStatus.MISSED:
+            requires_follow_up = True
                 
-    if policy and policy.pause_collection_on_payment_promise and active_promise_count > 0:
+    if pause_on_promise and active_promise_count > 0:
         is_paused = True
         reasons.append("PAYMENT_PROMISE")
 

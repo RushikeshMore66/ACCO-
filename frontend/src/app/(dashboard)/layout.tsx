@@ -1,65 +1,47 @@
-"use client";
+import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { validateSession } from "@/lib/auth/session";
+import { DashboardShell } from "@/components/layout/DashboardShell";
 
-import { SidebarWithState } from "@/components/layout/Sidebar";
-import { TopBar } from "@/components/layout/TopBar";
-import { DemoModeBanner } from "@/components/shared/DemoModeBanner";
-import { usePathname } from "next/navigation";
+export const dynamic = "force-dynamic";
 
 /**
- * Page title map — derives the page title from the current pathname.
- * This avoids prop-drilling titles through every page component.
+ * Validates and sanitizes a requested route before using it as a redirect target.
+ * Rejects external URLs, protocol-relative paths, root, and the default dashboard route.
  */
-function usePageTitle(): string {
-  const pathname = usePathname();
-  const titleMap: Record<string, string> = {
-    "/dashboard": "Overview",
-    "/collections": "Collections",
-    "/collections/promises": "Payment Promises",
-    "/collections/disputes": "Disputes",
-    "/collections/payments": "Payments & Reconciliation",
-    "/communications": "Communications",
-    "/invoices": "Invoices",
-    "/customers": "Customers",
-    "/reports": "Reports",
-    "/settings/team": "Team & Users",
-    "/policies": "Collection Policies",
-    "/settings/audit": "Activity & Audit Log",
-    "/settings": "Settings",
-    "/settings/profile": "Profile",
-  };
-  return titleMap[pathname] ?? "ACCO";
+function getSafeNextParam(pathname: string | null): string | null {
+  if (!pathname || pathname === "/" || pathname === "/dashboard" || pathname === "/login") {
+    return null;
+  }
+  // Must be a safe relative path starting with / and not //, and not containing protocol/backslashes
+  if (
+    pathname.startsWith("/") &&
+    !pathname.startsWith("//") &&
+    !pathname.includes("://") &&
+    !pathname.includes("\\")
+  ) {
+    return pathname;
+  }
+  return null;
 }
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const title = usePageTitle();
+  const user = await validateSession();
 
-  return (
-    <div className="flex h-screen overflow-hidden bg-surface">
-      {/* Sidebar */}
-      <SidebarWithState />
+  if (!user) {
+    const headersList = await headers();
+    const pathname = headersList.get("x-pathname");
+    const safeNext = getSafeNextParam(pathname);
 
-      {/* Main content column */}
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        {/* Demo mode banner */}
-        <DemoModeBanner />
+    if (safeNext) {
+      redirect(`/login?next=${encodeURIComponent(safeNext)}`);
+    }
+    redirect("/login");
+  }
 
-        {/* Top bar */}
-        <TopBar title={title} />
-
-        {/* Page content */}
-        <main
-          id="main-content"
-          className="flex-1 overflow-y-auto bg-surface"
-          tabIndex={-1}
-          aria-label="Main content"
-        >
-          {children}
-        </main>
-      </div>
-    </div>
-  );
+  return <DashboardShell>{children}</DashboardShell>;
 }

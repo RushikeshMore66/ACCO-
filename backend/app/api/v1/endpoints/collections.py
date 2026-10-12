@@ -69,6 +69,8 @@ def update_policy(
     db.refresh(policy)
     return policy
 
+from app.models.collection_workflow import CollectionDispute, PaymentPromise, DisputeStatus, PromiseStatus
+
 @router.get("/queue", response_model=List[ReceivableItemResponse])
 def get_collection_queue(
     db: Session = Depends(get_db),
@@ -94,13 +96,45 @@ def get_collection_queue(
         stmt = stmt.where(Invoice.currency == currency)
         
     invoices = db.execute(stmt).all()
+
+    # Pre-fetch active disputes and promises for this tenant to avoid N+1 queries
+    all_disputes = db.scalars(
+        select(CollectionDispute)
+        .where(
+            CollectionDispute.organization_id == current_user.organization_id,
+            CollectionDispute.status.in_([DisputeStatus.OPEN, DisputeStatus.UNDER_REVIEW])
+        )
+    ).all()
+    disputes_by_inv: dict[uuid.UUID, list[CollectionDispute]] = {}
+    for d in all_disputes:
+        disputes_by_inv.setdefault(d.invoice_id, []).append(d)
+
+    all_promises = db.scalars(
+        select(PaymentPromise)
+        .where(
+            PaymentPromise.organization_id == current_user.organization_id,
+            PaymentPromise.status == PromiseStatus.ACTIVE
+        )
+    ).all()
+    promises_by_inv: dict[uuid.UUID, list[PaymentPromise]] = {}
+    for p in all_promises:
+        promises_by_inv.setdefault(p.invoice_id, []).append(p)
     
     as_of_date = datetime.now(UTC)
     queue = []
     
     for inv, customer_name in invoices:
         balance = get_invoice_balance(db, inv)
-        evaluation = evaluate_collection_status(balance, policy, customer_name, as_of_date)
+        inv_disputes = disputes_by_inv.get(inv.id, [])
+        inv_promises = promises_by_inv.get(inv.id, [])
+        evaluation = evaluate_collection_status(
+            balance, 
+            policy, 
+            customer_name, 
+            as_of_date,
+            disputes=inv_disputes,
+            promises=inv_promises
+        )
         
         if evaluation:
             if stage and evaluation.collection_stage != stage:
@@ -108,11 +142,15 @@ def get_collection_queue(
             queue.append(evaluation)
             
     stage_priority = {
+        "BROKEN_PROMISE_FOLLOWUP": 0,
         "ESCALATION_REVIEW": 1,
         "FOLLOW_UP": 2,
         "EARLY_OVERDUE": 3,
         "WAITING_FOR_INITIAL_REMINDER": 4,
-        "NOT_DUE": 5
+        "NOT_DUE": 5,
+        "PAUSED_DISPUTE": 6,
+        "PAUSED_PROMISE": 7,
+        "PAUSED": 8
     }
     
     queue.sort(key=lambda x: (
@@ -140,13 +178,46 @@ def get_collection_summary(
     )
     
     invoices = db.execute(stmt).all()
+
+    # Pre-fetch active disputes and promises
+    all_disputes = db.scalars(
+        select(CollectionDispute)
+        .where(
+            CollectionDispute.organization_id == current_user.organization_id,
+            CollectionDispute.status.in_([DisputeStatus.OPEN, DisputeStatus.UNDER_REVIEW])
+        )
+    ).all()
+    disputes_by_inv: dict[uuid.UUID, list[CollectionDispute]] = {}
+    for d in all_disputes:
+        disputes_by_inv.setdefault(d.invoice_id, []).append(d)
+
+    all_promises = db.scalars(
+        select(PaymentPromise)
+        .where(
+            PaymentPromise.organization_id == current_user.organization_id,
+            PaymentPromise.status == PromiseStatus.ACTIVE
+        )
+    ).all()
+    promises_by_inv: dict[uuid.UUID, list[PaymentPromise]] = {}
+    for p in all_promises:
+        promises_by_inv.setdefault(p.invoice_id, []).append(p)
+
     as_of_date = datetime.now(UTC)
     
     summaries_by_currency = {}
     
     for inv, customer_name in invoices:
         balance = get_invoice_balance(db, inv)
-        evaluation = evaluate_collection_status(balance, policy, customer_name, as_of_date)
+        inv_disputes = disputes_by_inv.get(inv.id, [])
+        inv_promises = promises_by_inv.get(inv.id, [])
+        evaluation = evaluate_collection_status(
+            balance, 
+            policy, 
+            customer_name, 
+            as_of_date,
+            disputes=inv_disputes,
+            promises=inv_promises
+        )
         
         if evaluation:
             c = evaluation.currency

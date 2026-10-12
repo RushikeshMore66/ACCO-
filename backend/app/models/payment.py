@@ -71,8 +71,8 @@ class Payment(Base):
     customer: Mapped["Customer"] = relationship("Customer", back_populates="payments", primaryjoin="and_(Payment.organization_id==Customer.organization_id, Payment.customer_id==Customer.id)", overlaps="organization,payments")
     recorded_by: Mapped["User"] = relationship("User", foreign_keys=[recorded_by_user_id])
     
-    allocations: Mapped[list["PaymentAllocation"]] = relationship("PaymentAllocation", back_populates="payment")
-    reversal: Mapped["PaymentReversal | None"] = relationship("PaymentReversal", back_populates="payment", uselist=False)
+    allocations: Mapped[list["PaymentAllocation"]] = relationship("PaymentAllocation", back_populates="payment", overlaps="allocations")
+    reversal: Mapped["PaymentReversal | None"] = relationship("PaymentReversal", back_populates="payment", uselist=False, overlaps="reversal")
 
     __table_args__ = (
         ForeignKeyConstraint(

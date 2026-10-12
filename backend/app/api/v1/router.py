@@ -13,6 +13,7 @@ from app.api.v1.endpoints import (
     email_deliveries,
     reply_analyses,
     webhooks,
+    dashboard,
 )
 
 api_router = APIRouter()
@@ -34,6 +35,9 @@ api_router.include_router(payments.router, prefix="/payments", tags=["payments"]
 
 # Receivables
 api_router.include_router(receivables.router, prefix="/receivables", tags=["receivables"])
+
+# Dashboard
+api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 
 # Collections
 api_router.include_router(collections.router, prefix="/collections", tags=["collections"])

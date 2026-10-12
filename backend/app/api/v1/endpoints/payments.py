@@ -267,6 +267,65 @@ def reverse_payment(
             reversed_by_user_id=current_user.id
         )
         db.add(reversal)
+        
+        # Reassess any fulfilled promises for invoices affected by this payment
+        from datetime import datetime, UTC
+        from app.models.collection_workflow import (
+            PaymentPromise, PromiseStatus, CollectionActivity, EventType
+        )
+        affected_invoice_ids = [alloc.invoice_id for alloc in payment.allocations]
+        if affected_invoice_ids:
+            fulfilled_promises = db.scalars(
+                select(PaymentPromise)
+                .where(
+                    PaymentPromise.invoice_id.in_(affected_invoice_ids),
+                    PaymentPromise.status == PromiseStatus.FULFILLED
+                )
+                .with_for_update()
+            ).all()
+
+            today = datetime.now(UTC).date()
+            for promise in fulfilled_promises:
+                # Recalculate remaining non-reversed allocations
+                remaining_allocs = db.scalars(
+                    select(PaymentAllocation)
+                    .join(Payment, PaymentAllocation.payment_id == Payment.id)
+                    .outerjoin(PaymentReversal, Payment.id == PaymentReversal.payment_id)
+                    .where(
+                        PaymentAllocation.invoice_id == promise.invoice_id,
+                        PaymentAllocation.organization_id == promise.organization_id,
+                        PaymentAllocation.customer_id == promise.customer_id,
+                        Payment.currency == promise.currency,
+                        PaymentAllocation.created_at >= promise.created_at,
+                        Payment.payment_date <= promise.expected_payment_date,
+                        Payment.id != payment.id,  # Exclude the payment being reversed right now
+                        PaymentReversal.id.is_(None)
+                    )
+                ).all()
+
+                remaining_total = sum((alloc.amount for alloc in remaining_allocs), Decimal("0.00"))
+                if remaining_total < promise.promised_amount:
+                    if today > promise.expected_payment_date:
+                        promise.status = PromiseStatus.MISSED
+                        event_type = EventType.PROMISE_MISSED
+                        desc = f"Promise reverted to MISSED after payment reversal ({payment.id}): qualifying payments {remaining_total} < {promise.promised_amount}"
+                    else:
+                        promise.status = PromiseStatus.ACTIVE
+                        promise.resolved_at = None
+                        event_type = EventType.COLLECTION_RESUMED
+                        desc = f"Promise reverted to ACTIVE after payment reversal ({payment.id}): qualifying payments {remaining_total} < {promise.promised_amount}"
+
+                    activity = CollectionActivity(
+                        organization_id=promise.organization_id,
+                        invoice_id=promise.invoice_id,
+                        customer_id=promise.customer_id,
+                        actor_user_id=current_user.id,
+                        event_type=event_type,
+                        description=desc,
+                        created_at=datetime.now(UTC)
+                    )
+                    db.add(activity)
+
         db.commit()
         db.refresh(payment)
         

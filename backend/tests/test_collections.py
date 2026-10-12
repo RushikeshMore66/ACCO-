@@ -138,3 +138,125 @@ def test_collection_queue_and_summary(client: TestClient, db_session: Session, n
     
     assert usd_sum["overdue_invoices_count"] == 2 # inv 2, 3
     assert eur_sum["overdue_invoices_count"] == 1 # inv 4
+
+
+def test_collection_pause_on_dispute_and_promise(client: TestClient, db_session: Session, normal_user_token_headers: dict[str, str]):
+    now = datetime.now(UTC)
+    
+    # Customer
+    r = client.post("/api/v1/customers", headers=normal_user_token_headers, json={"name": "Pause Cust", "email": "pause@example.com"})
+    cust_id = r.json()["id"]
+
+    # Invoice: Overdue by 15 days
+    r = client.post("/api/v1/invoices", headers=normal_user_token_headers, json={
+        "customer_id": cust_id, "invoice_number": "INV-PAUSE-01",
+        "issue_date": (now - timedelta(days=45)).isoformat(), "due_date": (now - timedelta(days=15)).isoformat(),
+        "currency": "USD", "total_amount": "500.00"
+    })
+    inv_id = r.json()["id"]
+    client.post(f"/api/v1/invoices/{inv_id}/issue", headers=normal_user_token_headers)
+
+    # Initially in queue as FOLLOW_UP
+    r = client.get("/api/v1/collections/queue", headers=normal_user_token_headers)
+    assert r.status_code == 200
+    item = next(q for q in r.json() if q["invoice_id"] == inv_id)
+    assert item["collection_stage"] == "FOLLOW_UP"
+
+    # Open a dispute on this invoice
+    r = client.post(f"/api/v1/collections/invoices/{inv_id}/disputes", headers=normal_user_token_headers, json={
+        "category": "INCORRECT_AMOUNT",
+        "description": "Customer claims calculation error"
+    })
+    assert r.status_code == 200
+    disp_id = r.json()["id"]
+
+    # Queue should now show PAUSED_DISPUTE and suppress reminder
+    r = client.get("/api/v1/collections/queue", headers=normal_user_token_headers)
+    item = next(q for q in r.json() if q["invoice_id"] == inv_id)
+    assert item["collection_stage"] == "PAUSED_DISPUTE"
+    assert item["recommended_action"] == "RESOLVE_DISPUTE_FIRST"
+
+    # Attempt to draft and send email while disputed
+    r = client.post(f"/api/v1/collections/invoices/{inv_id}/messages", headers=normal_user_token_headers, json={
+        "channel": "EMAIL", "body": "Please pay immediately."
+    })
+    msg_id = r.json()["id"]
+    client.post(f"/api/v1/collections/messages/{msg_id}/submit-for-approval", headers=normal_user_token_headers)
+    client.post(f"/api/v1/collections/messages/{msg_id}/approve", headers=normal_user_token_headers)
+
+    # Enqueue delivery must be blocked with HTTP 409
+    r = client.post(f"/api/v1/collections/messages/{msg_id}/deliveries", headers=normal_user_token_headers)
+    assert r.status_code == 409
+    assert "paused" in r.json()["detail"].lower()
+
+    # Resolve dispute
+    client.post(f"/api/v1/collections/disputes/{disp_id}/resolve", headers=normal_user_token_headers, json={
+        "resolution_notes": "Reviewed and verified invoice is correct."
+    })
+
+    # Queue re-evaluates back to FOLLOW_UP
+    r = client.get("/api/v1/collections/queue", headers=normal_user_token_headers)
+    item = next(q for q in r.json() if q["invoice_id"] == inv_id)
+    assert item["collection_stage"] == "FOLLOW_UP"
+
+    # Enqueue delivery now succeeds with real customer email snapshot
+    r = client.post(f"/api/v1/collections/messages/{msg_id}/deliveries", headers=normal_user_token_headers)
+    assert r.status_code == 202
+    delivery = r.json()
+    assert delivery["recipient_email"] == "pause@example.com"
+    assert delivery["status"] == "QUEUED"
+
+
+def test_sweep_expired_promises(client: TestClient, db_session: Session, normal_user_token_headers: dict[str, str]):
+    now = datetime.now(UTC)
+    r = client.post("/api/v1/customers", headers=normal_user_token_headers, json={"name": "Sweep Cust", "email": "sweep@example.com"})
+    cust_id = r.json()["id"]
+
+    r = client.post("/api/v1/invoices", headers=normal_user_token_headers, json={
+        "customer_id": cust_id, "invoice_number": "INV-SWEEP-01",
+        "issue_date": (now - timedelta(days=60)).isoformat(), "due_date": (now - timedelta(days=30)).isoformat(),
+        "currency": "USD", "total_amount": "800.00"
+    })
+    inv_id = r.json()["id"]
+    client.post(f"/api/v1/invoices/{inv_id}/issue", headers=normal_user_token_headers)
+
+    # Create promise expected in the past
+    import uuid
+    from sqlalchemy import select
+    from app.models.customer import Customer
+    from app.models.collection_workflow import PaymentPromise, PromiseStatus
+    past_date = (now - timedelta(days=5)).date()
+    cust_uuid = uuid.UUID(cust_id)
+    inv_uuid = uuid.UUID(inv_id)
+    org_id = db_session.execute(select(Customer.organization_id).where(Customer.id == cust_uuid)).scalar()
+    promise = PaymentPromise(
+        organization_id=org_id,
+        customer_id=cust_uuid,
+        invoice_id=inv_uuid,
+        promised_amount=800.00,
+        currency="USD",
+        expected_payment_date=past_date,
+        follow_up_date=past_date + timedelta(days=1),
+        status=PromiseStatus.ACTIVE
+    )
+    db_session.add(promise)
+    db_session.commit()
+
+    # Trigger worker sweep
+    from app.workers.tasks.followups import sweep_expired_promises
+    count = sweep_expired_promises(db_session, now)
+    assert count >= 1
+
+    db_session.refresh(promise)
+    assert promise.status == PromiseStatus.MISSED
+
+
+def test_dashboard_summary_endpoint(client: TestClient, db_session: Session, normal_user_token_headers: dict[str, str]):
+    r = client.get("/api/v1/dashboard/summary", headers=normal_user_token_headers)
+    assert r.status_code == 200
+    data = r.json()
+    assert "kpis" in data
+    assert "active_promises_count" in data
+    assert "missed_promises_count" in data
+    assert "open_disputes_count" in data
+    assert "attention_items" in data

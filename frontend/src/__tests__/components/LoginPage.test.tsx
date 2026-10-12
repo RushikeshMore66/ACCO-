@@ -78,4 +78,21 @@ describe("LoginPage Redirects", () => {
       expect(mockPush).toHaveBeenCalledWith("/dashboard");
     });
   });
+
+  it("prevents redirect loops by defaulting to /dashboard when next is / or /login", async () => {
+    (useSearchParams as any).mockReturnValue({
+      get: vi.fn().mockReturnValue("/")
+    });
+
+    render(<LoginPage />);
+
+    fireEvent.change(screen.getByPlaceholderText(/you@company.com/i), { target: { value: "test@example.com" } });
+    fireEvent.change(screen.getByPlaceholderText(/••••••••/i), { target: { value: "password123" } });
+    
+    fireEvent.click(screen.getAllByRole("button", { name: /sign in/i })[1]);
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith("/dashboard");
+    });
+  });
 });

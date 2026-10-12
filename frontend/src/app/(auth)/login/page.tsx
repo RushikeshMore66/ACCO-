@@ -86,7 +86,15 @@ function LoginFormContent() {
 
       // Safe redirect logic
       const nextUrl = searchParams.get("next");
-      if (nextUrl && nextUrl.startsWith("/") && !nextUrl.startsWith("//")) {
+      if (
+        nextUrl &&
+        nextUrl.startsWith("/") &&
+        !nextUrl.startsWith("//") &&
+        !nextUrl.includes("://") &&
+        !nextUrl.includes("\\") &&
+        nextUrl !== "/" &&
+        nextUrl !== "/login"
+      ) {
         router.push(nextUrl);
       } else {
         router.push("/dashboard");

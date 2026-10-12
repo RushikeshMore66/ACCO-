@@ -132,6 +132,31 @@ def create_promise(
     db.refresh(promise)
     return promise
 
+@router.get("/promises", response_model=List[PromiseResponse])
+def list_all_promises(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles([UserRole.OWNER, UserRole.FINANCE_MANAGER, UserRole.COLLECTOR, UserRole.VIEWER])),
+    customer_id: uuid.UUID | None = None,
+    invoice_id: uuid.UUID | None = None,
+    status: PromiseStatus | None = None,
+    limit: int = 100,
+    offset: int = 0,
+):
+    stmt = select(PaymentPromise).where(PaymentPromise.organization_id == current_user.organization_id)
+    if customer_id:
+        stmt = stmt.where(PaymentPromise.customer_id == customer_id)
+    if invoice_id:
+        stmt = stmt.where(PaymentPromise.invoice_id == invoice_id)
+    if status:
+        stmt = stmt.where(PaymentPromise.status == status)
+
+    promises = db.scalars(
+        stmt.order_by(PaymentPromise.expected_payment_date.asc(), PaymentPromise.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return promises
+
 @router.get("/invoices/{invoice_id}/promises", response_model=List[PromiseResponse])
 def get_promises(
     invoice_id: uuid.UUID,
@@ -165,9 +190,12 @@ def mark_promise_fulfilled(
         .outerjoin(PaymentReversal, Payment.id == PaymentReversal.payment_id)
         .where(
             PaymentAllocation.invoice_id == promise.invoice_id,
+            PaymentAllocation.organization_id == promise.organization_id,
+            PaymentAllocation.customer_id == promise.customer_id,
+            Payment.currency == promise.currency,
             PaymentAllocation.created_at >= promise.created_at,
             Payment.payment_date <= promise.expected_payment_date,
-            PaymentReversal.id is None
+            PaymentReversal.id.is_(None)
         )
     ).all()
     
@@ -272,6 +300,32 @@ def create_dispute(
     db.commit()
     db.refresh(dispute)
     return dispute
+
+@router.get("/disputes", response_model=List[DisputeResponse])
+def list_all_disputes(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles([UserRole.OWNER, UserRole.FINANCE_MANAGER, UserRole.COLLECTOR, UserRole.VIEWER])),
+    customer_id: uuid.UUID | None = None,
+    invoice_id: uuid.UUID | None = None,
+    status: DisputeStatus | None = None,
+    category: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+):
+    stmt = select(CollectionDispute).where(CollectionDispute.organization_id == current_user.organization_id)
+    if customer_id:
+        stmt = stmt.where(CollectionDispute.customer_id == customer_id)
+    if invoice_id:
+        stmt = stmt.where(CollectionDispute.invoice_id == invoice_id)
+    if status:
+        stmt = stmt.where(CollectionDispute.status == status)
+    if category:
+        stmt = stmt.where(CollectionDispute.category == category)
+
+    disputes = db.scalars(
+        stmt.order_by(CollectionDispute.created_at.desc()).offset(offset).limit(limit)
+    ).all()
+    return disputes
 
 @router.get("/invoices/{invoice_id}/disputes", response_model=List[DisputeResponse])
 def get_disputes(

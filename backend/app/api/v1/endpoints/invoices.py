@@ -235,3 +235,125 @@ def void_invoice(
     db.commit()
     db.refresh(invoice)
     return invoice
+
+from app.schemas.invoice import (
+    InvoiceImportBatchRequest,
+    InvoiceImportBatchResponse,
+    InvoiceImportBatchResultItem,
+)
+
+@router.post("/import", response_model=InvoiceImportBatchResponse, status_code=status.HTTP_200_OK)
+def import_invoices_batch(
+    *,
+    db: Session = Depends(get_db),
+    batch_req: InvoiceImportBatchRequest,
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    results: list[InvoiceImportBatchResultItem] = []
+    created_count = 0
+    rejected_count = 0
+
+    for item in batch_req.invoices:
+        # 1. Resolve Customer
+        customer = None
+        if item.customer_id:
+            customer = db.scalar(
+                select(Customer).where(
+                    Customer.id == item.customer_id,
+                    Customer.organization_id == current_user.organization_id
+                )
+            )
+        elif item.customer_name:
+            customer = db.scalar(
+                select(Customer).where(
+                    Customer.name == item.customer_name,
+                    Customer.organization_id == current_user.organization_id
+                )
+            )
+            # Create customer on the fly if email provided and not found
+            if not customer and item.customer_email:
+                customer = Customer(
+                    organization_id=current_user.organization_id,
+                    name=item.customer_name,
+                    email=item.customer_email,
+                    is_active=True
+                )
+                db.add(customer)
+                db.flush()
+
+        if not customer:
+            results.append(InvoiceImportBatchResultItem(
+                invoice_number=item.invoice_number,
+                status="REJECTED",
+                error="Customer could not be resolved or created for this organization"
+            ))
+            rejected_count += 1
+            continue
+
+        if not customer.is_active:
+            results.append(InvoiceImportBatchResultItem(
+                invoice_number=item.invoice_number,
+                status="REJECTED",
+                error="Customer is inactive"
+            ))
+            rejected_count += 1
+            continue
+
+        # 2. Check duplicate invoice number
+        existing = db.scalar(
+            select(Invoice).where(
+                Invoice.organization_id == current_user.organization_id,
+                Invoice.invoice_number == item.invoice_number
+            )
+        )
+        if existing:
+            results.append(InvoiceImportBatchResultItem(
+                invoice_number=item.invoice_number,
+                status="DUPLICATE",
+                invoice_id=existing.id,
+                error="Invoice number already exists in organization"
+            ))
+            rejected_count += 1
+            continue
+
+        # 3. Validate dates
+        if item.due_date < item.issue_date:
+            results.append(InvoiceImportBatchResultItem(
+                invoice_number=item.invoice_number,
+                status="REJECTED",
+                error="due_date cannot be earlier than issue_date"
+            ))
+            rejected_count += 1
+            continue
+
+        # 4. Create Invoice
+        invoice_status = InvoiceStatus.ISSUED if item.auto_issue else InvoiceStatus.DRAFT
+        new_inv = Invoice(
+            organization_id=current_user.organization_id,
+            customer_id=customer.id,
+            invoice_number=item.invoice_number,
+            issue_date=item.issue_date,
+            due_date=item.due_date,
+            currency=item.currency,
+            total_amount=item.total_amount,
+            description=item.description,
+            status=invoice_status
+        )
+        db.add(new_inv)
+        db.flush()
+
+        results.append(InvoiceImportBatchResultItem(
+            invoice_number=item.invoice_number,
+            status="ISSUED" if item.auto_issue else "CREATED",
+            invoice_id=new_inv.id
+        ))
+        created_count += 1
+
+    db.commit()
+
+    return InvoiceImportBatchResponse(
+        total_processed=len(batch_req.invoices),
+        created_count=created_count,
+        rejected_count=rejected_count,
+        results=results
+    )

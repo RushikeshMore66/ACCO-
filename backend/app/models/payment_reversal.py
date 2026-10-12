@@ -41,7 +41,7 @@ class PaymentReversal(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
-    organization: Mapped["Organization"] = relationship("Organization", foreign_keys=[organization_id])
+    organization: Mapped["Organization"] = relationship("Organization", foreign_keys=[organization_id], overlaps="reversal")
     payment: Mapped["Payment"] = relationship("Payment", back_populates="reversal", primaryjoin="and_(PaymentReversal.organization_id==Payment.organization_id, PaymentReversal.payment_id==Payment.id)", overlaps="organization,payment")
     reversed_by: Mapped["User"] = relationship("User", foreign_keys=[reversed_by_user_id])
 

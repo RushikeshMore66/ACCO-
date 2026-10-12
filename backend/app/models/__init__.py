@@ -17,6 +17,11 @@ from app.models.collection_workflow import (
     CollectionActivity,
 )
 from app.models.reply_analysis import CustomerReplyAnalysis
+from app.models.email_delivery import (
+    EmailDelivery,
+    EmailDeliveryAttempt,
+    EmailWebhookEvent,
+)
 
 __all__ = [
     "Base",
@@ -33,4 +38,7 @@ __all__ = [
     "CollectionDispute",
     "CollectionActivity",
     "CustomerReplyAnalysis",
+    "EmailDelivery",
+    "EmailDeliveryAttempt",
+    "EmailWebhookEvent",
 ]

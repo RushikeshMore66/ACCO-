@@ -96,10 +96,12 @@ class EmailWebhookEvent(Base):
     event_type: Mapped[str] = mapped_column(String(255), nullable=False)
     
     email_delivery_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("email_deliveries.id", ondelete="SET NULL"), nullable=True)
+    inbound_message_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("collection_messages.id", ondelete="SET NULL"), nullable=True)
     
     event_timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
     processing_result: Mapped[str] = mapped_column(String(255), nullable=False)
+    error_detail: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
         UniqueConstraint('provider', 'provider_event_id', name='uq_provider_event_id'),
