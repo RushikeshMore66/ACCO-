@@ -102,5 +102,9 @@ def downgrade() -> None:
     op.drop_table('payment_reversals')
     op.drop_table('payment_allocations')
     op.drop_table('payments')
-    op.execute('DROP TYPE paymentmethod')
+    
+    bind = op.get_bind()
+    if bind.engine.name == 'postgresql':
+        op.execute(sa.text('DROP TYPE IF EXISTS paymentmethod'))
+        
     op.drop_constraint('uq_invoice_org_id_customer', 'invoices', type_='unique')

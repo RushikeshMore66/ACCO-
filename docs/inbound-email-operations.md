@@ -66,13 +66,18 @@ All settings use the `ACCO_` prefix:
 
 ## 5. Security, Signatures, and Replay Protection
 
-### 5.1 Svix Signature Verification
+### 5.1 Svix Signature Verification & Consistent Route Security
+- Both webhook routes enforce identical security validation:
+  - `POST /api/v1/webhooks/email/inbound`
+  - `POST /api/v1/webhooks/email/resend`
 - Inbound webhooks provide standard Svix headers:
   - `svix-id`: Unique event message ID.
   - `svix-timestamp`: Unix timestamp in seconds.
   - `svix-signature`: Computed HMAC signature (e.g. `v1,<base64>`).
+- Signature verification runs **upfront on raw request bytes** before parsing untrusted JSON or executing any database statements.
 - ACCO removes the `whsec_` prefix, base64-decodes the secret bytes, and calculates `HMAC-SHA256` over `${svix-id}.${svix-timestamp}.${raw_body_bytes}`.
 - Comparison is performed using constant-time `hmac.compare_digest` to prevent timing attacks.
+- In production (`ACCO_ENVIRONMENT=production`), a missing webhook secret **fails closed with HTTP 503**, and missing or invalid signatures are rejected with HTTP 400/401.
 
 ### 5.2 Replay Protection Window
 - Webhooks with a timestamp older than **300 seconds (5 minutes)** or in the future beyond this tolerance are rejected with HTTP 401.
@@ -83,6 +88,24 @@ All settings use the `ACCO_` prefix:
 ### 5.4 Deduplication & Concurrency Protection
 - Events are tracked in the database table `email_webhook_events`.
 - A database-level unique constraint on `(provider, provider_event_id)` ensures duplicate deliveries and concurrent race conditions are handled idempotently.
+
+---
+
+## 5.5 Inbound Email Content Retrieval & Resend Receiving API
+
+Live Resend `email.received` webhook notifications typically supply event metadata (`email_id`, `from`, `to`, `subject`) but omit the complete body. ACCO handles this automatically:
+
+1. **Content Check**: If `data.text` or `data.html` is present in the webhook payload, ACCO validates and sanitizes it immediately.
+2. **Receiving API Retrieval**: When the webhook is metadata-only, ACCO fetches the full message and headers from the Resend Receiving API:
+   ```http
+   GET https://api.resend.com/emails/receiving/{email_id}
+   Authorization: Bearer <ACCO_RESEND_API_KEY>
+   ```
+3. **HTML Sanitization & Plain Text Conversion**: Plain text bodies are prioritized; if only HTML is returned, tags and script blocks are safely stripped using `clean_html_to_text()`.
+4. **No Empty Body or Subject Substitution**: ACCO strictly forbids substituting the subject line or empty placeholder strings for missing email bodies. If an email genuinely has no body, it is audited with `REJECTED_EMPTY_BODY` and ignored without triggering false AI analysis.
+5. **Transient vs. Permanent Failure Semantics**:
+   - **Transient Failures** (HTTP 429 rate limit, 5xx upstream server errors, network connect/read timeouts): ACCO raises HTTP 503 **without committing a deduplication event**, allowing Resend's automatic webhook retry mechanisms to re-deliver the event.
+   - **Permanent Failures** (HTTP 404 message not found, 401 authentication errors): ACCO records an audit event in `email_webhook_events` with `processing_result = RETRIEVAL_FAILED_PERMANENT` and returns HTTP 200 `ignored` to avoid endless provider retries.
 
 ---
 

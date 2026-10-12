@@ -35,6 +35,12 @@ from app.models.organization import Organization
 from app.models.reply_analysis import AnalysisStatus, CustomerReplyAnalysis, ReplyClassification
 from app.models.user import User
 from app.schemas.reply_analysis import LLMExtractionResult
+from app.services.email_provider import (
+    EmailProviderError,
+    MockReceivingProvider,
+    get_receiving_provider,
+    set_receiving_provider,
+)
 from app.services.inbound_email_service import verify_svix_signature
 
 
@@ -676,3 +682,262 @@ def test_14_existing_resend_endpoint_transparently_routes_inbound_and_delivery_e
         assert resp2.json()["status"] == "processed"
     finally:
         client.app.dependency_overrides.pop(reply_analyses.get_reply_provider_factory, None)
+
+
+def test_15_metadata_only_payload_retrieves_body_via_receiving_provider(
+    client: TestClient, db_session, inbound_setup
+):
+    """Scenario 15: Resend metadata-only webhook fetches actual body via receiving provider and analyzes it."""
+    mock_receiving = MockReceivingProvider({
+        "recv_meta_123": {
+            "id": "recv_meta_123",
+            "from": "billing@acmecorp.com",
+            "to": ["collections@mycompany.com"],
+            "subject": "Re: Outstanding Invoice",
+            "text": "Here is the payment confirmation. We will pay the remaining $500 next Tuesday.",
+            "html": "<p>Here is the payment confirmation. We will pay the remaining $500 next Tuesday.</p>",
+            "headers": {"in-reply-to": inbound_setup["provider_msg_id"]},
+        }
+    })
+    set_receiving_provider(mock_receiving)
+
+    fake_ai = MockAnalysisProvider()
+    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (lambda: fake_ai)
+
+    try:
+        # Webhook payload has NO text or html, only metadata and email_id
+        payload = {
+            "type": "email.received",
+            "data": {
+                "email_id": "recv_meta_123",
+                "from": "billing@acmecorp.com",
+                "to": ["collections@mycompany.com"],
+                "subject": "Re: Outstanding Invoice",
+            },
+        }
+        body_bytes = json.dumps(payload).encode("utf-8")
+        headers = {"svix-id": "evt_meta_retrieval_1", "content-type": "application/json"}
+
+        resp = client.post("/api/v1/webhooks/email/inbound", content=body_bytes, headers=headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "processed"
+        assert "recv_meta_123" in mock_receiving.calls
+
+        # Verify AI received the actual retrieved text body
+        assert fake_ai.calls == 1
+        analysis = db_session.get(CustomerReplyAnalysis, uuid.UUID(data["analysis_id"]))
+        assert analysis is not None
+        assert "500" in analysis.analysis_payload["evidence_summary"]
+
+        # Verify message record in DB has the retrieved text
+        msg = db_session.get(CollectionMessage, uuid.UUID(data["message_id"]))
+        assert msg is not None
+        assert "We will pay the remaining $500 next Tuesday" in msg.body
+    finally:
+        client.app.dependency_overrides.pop(reply_analyses.get_reply_provider_factory, None)
+        set_receiving_provider(None)
+
+
+def test_16_transient_retrieval_failure_raises_503_and_allows_retry(
+    client: TestClient, db_session, inbound_setup
+):
+    """Scenario 16: Transient API error returns 503 and does NOT record deduplication event, allowing retries."""
+    mock_receiving = MockReceivingProvider({
+        "recv_transient_1": {
+            "id": "recv_transient_1",
+            "from": "billing@acmecorp.com",
+            "to": ["collections@mycompany.com"],
+            "subject": "Re: Transient test",
+            "text": "I will settle the invoice tomorrow.",
+        }
+    })
+    mock_receiving.simulate_transient_error = True
+    set_receiving_provider(mock_receiving)
+
+    try:
+        payload = {
+            "type": "email.received",
+            "data": {
+                "email_id": "recv_transient_1",
+                "from": "billing@acmecorp.com",
+                "subject": "Re: Transient test",
+            },
+        }
+        body_bytes = json.dumps(payload).encode("utf-8")
+        headers = {"svix-id": "evt_transient_retry_1", "content-type": "application/json"}
+
+        # First attempt: should fail with 503
+        resp1 = client.post("/api/v1/webhooks/email/inbound", content=body_bytes, headers=headers)
+        assert resp1.status_code == 503
+        assert "failure retrieving email" in resp1.json()["detail"].lower()
+
+        # Ensure no EmailWebhookEvent was committed for this event_id
+        db_session.expire_all()
+        existing_event = db_session.scalar(
+            select(EmailWebhookEvent).where(EmailWebhookEvent.provider_event_id == "evt_transient_retry_1")
+        )
+        assert existing_event is None
+
+        # Clear the transient error (simulating network recovered / Resend retrying)
+        mock_receiving.simulate_transient_error = False
+
+        # Second attempt with the SAME event_id
+        resp2 = client.post("/api/v1/webhooks/email/inbound", content=body_bytes, headers=headers)
+        assert resp2.status_code == 200
+        assert resp2.json()["status"] == "processed"
+
+        # Now it is recorded
+        db_session.expire_all()
+        saved_event = db_session.scalar(
+            select(EmailWebhookEvent).where(EmailWebhookEvent.provider_event_id == "evt_transient_retry_1")
+        )
+        assert saved_event is not None
+    finally:
+        set_receiving_provider(None)
+
+
+def test_17_permanent_retrieval_failure_records_rejection_without_false_message(
+    client: TestClient, db_session, inbound_setup
+):
+    """Scenario 17: Permanent retrieval error (e.g. 404) records rejection without creating message or AI analysis."""
+    mock_receiving = MockReceivingProvider()
+    mock_receiving.simulate_permanent_error = True
+    set_receiving_provider(mock_receiving)
+
+    fake_ai = MockAnalysisProvider()
+    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (lambda: fake_ai)
+
+    try:
+        payload = {
+            "type": "email.received",
+            "data": {
+                "email_id": "recv_perm_404",
+                "from": "billing@acmecorp.com",
+                "subject": "Missing email",
+            },
+        }
+        body_bytes = json.dumps(payload).encode("utf-8")
+        headers = {"svix-id": "evt_perm_404_1", "content-type": "application/json"}
+
+        resp = client.post("/api/v1/webhooks/email/inbound", content=body_bytes, headers=headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "ignored"
+        assert "retrieval_failed" in data["reason"]
+        assert fake_ai.calls == 0
+
+        # Verify no message created
+        db_session.expire_all()
+        assert data.get("message_id") is None
+
+        # Verify audit record saved with permanent error status
+        audit = db_session.scalar(
+            select(EmailWebhookEvent).where(EmailWebhookEvent.provider_event_id == "evt_perm_404_1")
+        )
+        assert audit is not None
+        assert audit.processing_result == "RETRIEVAL_FAILED_PERMANENT"
+    finally:
+        client.app.dependency_overrides.pop(reply_analyses.get_reply_provider_factory, None)
+        set_receiving_provider(None)
+
+
+def test_18_empty_retrieved_body_is_rejected_without_fake_substitution(
+    client: TestClient, db_session, inbound_setup
+):
+    """Scenario 18: Empty body is ignored with REJECTED_EMPTY_BODY audit and never substituted with subject."""
+    mock_receiving = MockReceivingProvider({
+        "recv_empty_1": {
+            "id": "recv_empty_1",
+            "from": "billing@acmecorp.com",
+            "to": ["collections@mycompany.com"],
+            "subject": "Empty body subject",
+            "text": "   ",
+            "html": "",
+        }
+    })
+    set_receiving_provider(mock_receiving)
+
+    fake_ai = MockAnalysisProvider()
+    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (lambda: fake_ai)
+
+    try:
+        payload = {
+            "type": "email.received",
+            "data": {
+                "email_id": "recv_empty_1",
+                "from": "billing@acmecorp.com",
+                "subject": "Empty body subject",
+            },
+        }
+        body_bytes = json.dumps(payload).encode("utf-8")
+        headers = {"svix-id": "evt_empty_body_1", "content-type": "application/json"}
+
+        resp = client.post("/api/v1/webhooks/email/inbound", content=body_bytes, headers=headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "ignored"
+        assert data["reason"] == "empty_email_body"
+        assert fake_ai.calls == 0
+
+        # Verify audit event in DB records REJECTED_EMPTY_BODY
+        db_session.expire_all()
+        audit = db_session.scalar(
+            select(EmailWebhookEvent).where(EmailWebhookEvent.provider_event_id == "evt_empty_body_1")
+        )
+        assert audit is not None
+        assert audit.processing_result == "REJECTED_EMPTY_BODY"
+    finally:
+        client.app.dependency_overrides.pop(reply_analyses.get_reply_provider_factory, None)
+        set_receiving_provider(None)
+
+
+def test_19_production_mode_fails_closed_on_resend_endpoint_when_secret_missing(client: TestClient):
+    """Scenario 19: In production, /api/v1/webhooks/email/resend fails closed with 503 if secret missing."""
+    orig_env = settings.environment
+    orig_secret = settings.email_webhook_signing_secret
+
+    try:
+        settings.environment = "production"
+        settings.email_webhook_signing_secret = None
+
+        payload = {"type": "email.delivered", "data": {"email_id": "any"}}
+        body_bytes = json.dumps(payload).encode("utf-8")
+
+        resp = client.post(
+            "/api/v1/webhooks/email/resend",
+            content=body_bytes,
+            headers={"content-type": "application/json"},
+        )
+        assert resp.status_code == 503
+        assert "not configured" in resp.json()["detail"]
+    finally:
+        settings.environment = orig_env
+        settings.email_webhook_signing_secret = orig_secret
+
+
+def test_20_invalid_signature_on_resend_endpoint_is_rejected_before_db_mutation(
+    client: TestClient, db_session
+):
+    """Scenario 20: Invalid signature on /api/v1/webhooks/email/resend returns 401."""
+    orig_secret = settings.email_webhook_signing_secret
+
+    try:
+        settings.email_webhook_signing_secret = SecretStr(TEST_SIGNING_SECRET)
+
+        payload = {"type": "email.delivered", "data": {"email_id": "any"}}
+        body_bytes = json.dumps(payload).encode("utf-8")
+        headers = {
+            "svix-id": "evt_invalid_resend_1",
+            "svix-timestamp": str(int(time.time())),
+            "svix-signature": "v1,invalid_signature_base64",
+            "content-type": "application/json",
+        }
+
+        resp = client.post("/api/v1/webhooks/email/resend", content=body_bytes, headers=headers)
+        assert resp.status_code == 401
+        assert "Invalid webhook signature" in resp.json()["detail"]
+    finally:
+        settings.email_webhook_signing_secret = orig_secret
+
+

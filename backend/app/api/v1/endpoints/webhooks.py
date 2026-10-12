@@ -11,13 +11,18 @@ from app.api.deps import get_db
 from app.api.v1.endpoints.reply_analyses import get_reply_provider_factory
 from app.core.config import settings
 from app.models.email_delivery import DeliveryStatus, EmailDelivery, EmailWebhookEvent
+from app.services.email_provider import EmailReceivingProvider, get_receiving_provider
 from app.services.inbound_email_service import (
     InboundWebhookError,
     process_inbound_email_event,
-    verify_svix_signature,
+    validate_webhook_security,
 )
 
 router = APIRouter()
+
+
+def get_receiving_provider_dep() -> EmailReceivingProvider:
+    return get_receiving_provider()
 
 
 @router.post("/email/inbound", status_code=status.HTTP_200_OK)
@@ -25,14 +30,22 @@ async def inbound_email_webhook(
     request: Request,
     db: Session = Depends(get_db),
     provider_factory: Callable[[], ReplyExtractionProvider] = Depends(get_reply_provider_factory),
+    receiving_provider: EmailReceivingProvider = Depends(get_receiving_provider_dep),
 ):
     """
     Provider-specific inbound email webhook endpoint for receiving customer replies.
-    Validates signature, deduplicates events, safely matches customer/invoice/thread,
-    persists inbound collection message, and triggers advisory AI reply analysis.
+    Validates signature, deduplicates events, retrieves content if metadata-only,
+    safely matches customer/invoice/thread, persists inbound collection message,
+    and triggers advisory AI reply analysis.
     """
     body_bytes = await request.body()
     headers_dict = dict(request.headers)
+
+    # 1. Enforce consistent webhook signature and replay-window verification
+    try:
+        validate_webhook_security(body_bytes=body_bytes, headers=headers_dict)
+    except InboundWebhookError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from None
 
     try:
         result = process_inbound_email_event(
@@ -40,13 +53,15 @@ async def inbound_email_webhook(
             body_bytes=body_bytes,
             headers=headers_dict,
             provider_factory=provider_factory,
+            receiving_provider=receiving_provider,
+            skip_security_validation=True,
         )
         return result
     except InboundWebhookError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from None
     except HTTPException:
         raise
-    except Exception as unk_exc:
+    except Exception:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -59,49 +74,29 @@ async def resend_webhook(
     request: Request,
     db: Session = Depends(get_db),
     provider_factory: Callable[[], ReplyExtractionProvider] = Depends(get_reply_provider_factory),
+    receiving_provider: EmailReceivingProvider = Depends(get_receiving_provider_dep),
 ):
     """
-    Existing Resend webhook endpoint. Handles delivery status events (delivered, bounced, complained)
-    and transparently routes inbound customer replies (email.received) to the inbound pipeline.
+    Existing Resend webhook endpoint. Enforces the same signature verification policy.
+    Handles delivery status events (delivered, bounced, complained) and transparently
+    routes inbound customer replies (email.received) to the inbound pipeline.
     """
     body_bytes = await request.body()
     headers_dict = dict(request.headers)
-    svix_id = headers_dict.get("svix-id") or headers_dict.get("webhook-id")
-    svix_timestamp = headers_dict.get("svix-timestamp") or headers_dict.get("webhook-timestamp")
-    svix_signature = headers_dict.get("svix-signature") or headers_dict.get("webhook-signature")
 
-    if not svix_id:
-        raise HTTPException(status_code=400, detail="Missing Svix header: svix-id")
+    # 1. Enforce consistent webhook signature and replay-window verification
+    try:
+        validate_webhook_security(body_bytes=body_bytes, headers=headers_dict)
+    except InboundWebhookError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from None
 
-    # In production with configured signing secret, enforce signature validation
-    if settings.email_webhook_signing_secret:
-        if not svix_timestamp or not svix_signature:
-            raise HTTPException(status_code=400, detail="Missing Svix signature headers")
-        
-        # Verify using standard Svix verification
-        is_valid = verify_svix_signature(
-            body_bytes=body_bytes,
-            headers=headers_dict,
-            secret_value=settings.email_webhook_signing_secret.get_secret_value(),
-        )
-        if not is_valid:
-            # Fallback check with svix package if installed
-            try:
-                from svix.webhooks import Webhook
-                wh = Webhook(settings.email_webhook_signing_secret.get_secret_value())
-                wh.verify(body_bytes.decode("utf-8"), headers_dict)
-            except Exception:
-                raise HTTPException(status_code=401, detail="Invalid webhook signature") from None
+    try:
+        payload_data = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        raise HTTPException(status_code=400, detail="Malformed JSON webhook payload")
 
-        try:
-            payload_data = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
-        except json.JSONDecodeError:
-            raise HTTPException(status_code=400, detail="Malformed JSON webhook payload")
-    else:
-        try:
-            payload_data = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
-        except json.JSONDecodeError:
-            payload_data = {}
+    if not isinstance(payload_data, dict):
+        raise HTTPException(status_code=400, detail="Webhook payload must be a JSON object")
 
     event_type = payload_data.get("type", "email.delivered")
 
@@ -113,18 +108,22 @@ async def resend_webhook(
                 body_bytes=body_bytes,
                 headers=headers_dict,
                 provider_factory=provider_factory,
+                receiving_provider=receiving_provider,
+                skip_security_validation=True,
             )
         except InboundWebhookError as exc:
             raise HTTPException(status_code=exc.status_code, detail=exc.message) from None
 
-    provider_event_id = svix_id
+    norm_headers = {k.lower(): v for k, v in headers_dict.items()}
+    svix_id = norm_headers.get("svix-id") or norm_headers.get("webhook-id")
+    provider_event_id = svix_id or payload_data.get("data", {}).get("email_id") or "unknown"
     provider_message_id = (
         payload_data.get("data", {}).get("email_id")
         or payload_data.get("email_id")
         or "unknown"
     )
 
-    # 2. Deduplicate inbound event
+    # 2. Deduplicate event
     existing = db.scalar(
         select(EmailWebhookEvent).where(
             EmailWebhookEvent.provider == "resend",
@@ -167,4 +166,5 @@ async def resend_webhook(
     db.commit()
 
     return {"status": "processed"}
+
 

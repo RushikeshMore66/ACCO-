@@ -69,7 +69,9 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_invoices_organization_id'), table_name='invoices')
     op.drop_table('invoices')
     
-    op.execute('DROP TYPE invoicestatus')
+    bind = op.get_bind()
+    if bind.engine.name == 'postgresql':
+        op.execute(sa.text('DROP TYPE IF EXISTS invoicestatus'))
     
     op.drop_index(op.f('ix_customers_organization_id'), table_name='customers')
     op.drop_table('customers')

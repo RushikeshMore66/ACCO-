@@ -11,6 +11,7 @@ from app.core.config import settings
 class EmailProviderError(Exception):
     def __init__(self, message: str, error_code: str = "PROVIDER_ERROR", is_transient: bool = False):
         super().__init__(message)
+        self.message = message
         self.error_code = error_code
         self.is_transient = is_transient
 
@@ -143,3 +144,146 @@ def get_email_provider() -> EmailProvider:
 def set_email_provider(provider: Optional[EmailProvider]) -> None:
     global _global_provider
     _global_provider = provider
+
+
+@runtime_checkable
+class EmailReceivingProvider(Protocol):
+    def get_received_email(self, email_id: str) -> dict:
+        """
+        Retrieves received email content and headers by email_id.
+        Returns dict matching Resend receiving email schema.
+        Raises EmailProviderError on failure.
+        """
+        ...
+
+
+class ResendReceivingProvider:
+    def __init__(self, api_key: Optional[str] = None, base_url: str = "https://api.resend.com"):
+        self.api_key = api_key or (
+            settings.resend_api_key.get_secret_value() if settings.resend_api_key else None
+        )
+        self.base_url = base_url.rstrip("/")
+
+    def get_received_email(self, email_id: str) -> dict:
+        if not self.api_key:
+            raise EmailProviderError(
+                "Resend API key is not configured for receiving API",
+                error_code="MISSING_API_KEY",
+                is_transient=False,
+            )
+
+        url = f"{self.base_url}/emails/receiving/{email_id}"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            with httpx.Client(timeout=httpx.Timeout(10.0, connect=5.0)) as client:
+                response = client.get(url, headers=headers)
+        except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
+            raise EmailProviderError(
+                f"Network error contacting Resend receiving API: {str(exc)}",
+                error_code="NETWORK_TIMEOUT",
+                is_transient=True,
+            ) from exc
+
+        if response.status_code == 404:
+            raise EmailProviderError(
+                f"Received email {email_id} not found in Resend (404)",
+                error_code="MESSAGE_NOT_FOUND",
+                is_transient=False,
+            )
+
+        if response.status_code in (401, 403):
+            raise EmailProviderError(
+                f"Authentication failed retrieving email from Resend ({response.status_code})",
+                error_code="AUTHENTICATION_FAILED",
+                is_transient=False,
+            )
+
+        if response.status_code == 429:
+            raise EmailProviderError(
+                "Resend receiving API rate limit exceeded (429)",
+                error_code="RATE_LIMITED",
+                is_transient=True,
+            )
+
+        if response.status_code >= 500:
+            raise EmailProviderError(
+                f"Resend service error retrieving email ({response.status_code})",
+                error_code=f"HTTP_{response.status_code}",
+                is_transient=True,
+            )
+
+        if response.status_code >= 400:
+            raise EmailProviderError(
+                f"Resend client error ({response.status_code}): {response.text}",
+                error_code=f"HTTP_{response.status_code}",
+                is_transient=False,
+            )
+
+        try:
+            data = response.json()
+        except Exception as exc:
+            raise EmailProviderError(
+                "Malformed JSON response from Resend receiving API",
+                error_code="MALFORMED_RESPONSE",
+                is_transient=False,
+            ) from exc
+
+        if not isinstance(data, dict):
+            raise EmailProviderError(
+                "Invalid response structure from Resend receiving API",
+                error_code="INVALID_RESPONSE",
+                is_transient=False,
+            )
+
+        return data
+
+
+class MockReceivingProvider:
+    def __init__(self, emails: Optional[dict[str, dict]] = None):
+        self.emails: dict[str, dict] = dict(emails) if emails else {}
+        self.calls: list[str] = []
+        self.simulate_transient_error = False
+        self.simulate_permanent_error = False
+        self.error_message = "Simulated retrieval failure"
+
+    def get_received_email(self, email_id: str) -> dict:
+        self.calls.append(email_id)
+        if self.simulate_transient_error:
+            raise EmailProviderError(
+                self.error_message,
+                error_code="SIMULATED_TRANSIENT",
+                is_transient=True,
+            )
+        if self.simulate_permanent_error:
+            raise EmailProviderError(
+                self.error_message,
+                error_code="SIMULATED_PERMANENT",
+                is_transient=False,
+            )
+        if email_id not in self.emails:
+            raise EmailProviderError(
+                f"Email {email_id} not found in mock store",
+                error_code="MESSAGE_NOT_FOUND",
+                is_transient=False,
+            )
+        return self.emails[email_id]
+
+
+_global_receiving_provider: Optional[EmailReceivingProvider] = None
+
+def get_receiving_provider() -> EmailReceivingProvider:
+    global _global_receiving_provider
+    if _global_receiving_provider is not None:
+        return _global_receiving_provider
+    if settings.resend_api_key:
+        return ResendReceivingProvider()
+    return MockReceivingProvider()
+
+def set_receiving_provider(provider: Optional[EmailReceivingProvider]) -> None:
+    global _global_receiving_provider
+    _global_receiving_provider = provider
+

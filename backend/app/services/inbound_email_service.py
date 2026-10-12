@@ -45,6 +45,11 @@ from app.services.customer_reply_intelligence import (
     ReplyAnalysisError,
     analyze_customer_reply,
 )
+from app.services.email_provider import (
+    EmailProviderError,
+    EmailReceivingProvider,
+    get_receiving_provider,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +138,45 @@ def verify_svix_signature(
             return True
 
     return False
+
+
+def validate_webhook_security(
+    *,
+    body_bytes: bytes,
+    headers: dict[str, str],
+) -> None:
+    """
+    Shared signature verification policy for all incoming email webhook endpoints:
+      - In production (ACCO_ENVIRONMENT=production): fail closed (503) if signing secret is missing.
+      - If signing secret is configured: reject missing headers (400), invalid signatures (401),
+        or replay-window violations (401).
+      - In non-production without configured secret: allow unsigned requests for local testing/dev.
+    """
+    is_prod = settings.environment.lower() == "production"
+    signing_secret = settings.email_webhook_signing_secret
+
+    if is_prod and not signing_secret:
+        logger.error("Production email webhook rejected: signing secret is not configured")
+        raise WebhookConfigurationError("Webhook signing secret is not configured in production")
+
+    if signing_secret:
+        norm_headers = {k.lower(): v for k, v in headers.items()}
+        svix_id = norm_headers.get("svix-id") or norm_headers.get("webhook-id")
+        svix_timestamp = norm_headers.get("svix-timestamp") or norm_headers.get("webhook-timestamp")
+        svix_signature = norm_headers.get("svix-signature") or norm_headers.get("webhook-signature")
+
+        if not svix_id or not svix_timestamp or not svix_signature:
+            raise InboundWebhookError("Missing Svix signature headers", status_code=400)
+
+        is_valid = verify_svix_signature(
+            body_bytes=body_bytes,
+            headers=headers,
+            secret_value=signing_secret.get_secret_value(),
+        )
+        if not is_valid:
+            logger.warning("Email webhook signature verification failed for event %s", svix_id)
+            raise WebhookSignatureVerificationError("Invalid webhook signature")
+
 
 
 def normalize_email_address(raw_address: str | None) -> str:
@@ -384,48 +428,29 @@ def process_inbound_email_event(
     body_bytes: bytes,
     headers: dict[str, str],
     provider_factory: Callable[[], ReplyExtractionProvider] = OpenAIProviderAdapter,
+    receiving_provider: Optional[EmailReceivingProvider] = None,
+    skip_security_validation: bool = False,
 ) -> dict[str, Any]:
     """
     End-to-end inbound email processing:
-      1. Check payload size boundary.
-      2. Verify Svix signature (or fail closed in production).
-      3. Deduplicate event.
-      4. Parse message, extract sender and content.
-      5. Resolve customer/invoice evidence safely.
-      6. Persist inbound CollectionMessage and audit records.
-      7. Trigger advisory AI reply analysis (if eligible).
+      1. Enforce signature and replay verification (if not already verified upstream).
+      2. Check payload size boundary.
+      3. Deduplicate event against database.
+      4. Parse message; if metadata-only, retrieve real content via Resend Receiving API.
+      5. Validate real customer body (no silent substitutions of subject or placeholder).
+      6. Resolve customer/invoice evidence safely.
+      7. Persist inbound CollectionMessage and audit records.
+      8. Trigger advisory AI reply analysis (if eligible).
     """
-    # 1. Enforce payload size boundary
+    # 1. Enforce security policy
+    if not skip_security_validation:
+        validate_webhook_security(body_bytes=body_bytes, headers=headers)
+
+    # 2. Enforce payload size boundary
     if len(body_bytes) > MAX_INBOUND_PAYLOAD_BYTES:
         raise PayloadTooLargeError("Inbound webhook payload exceeds 2MB limit")
 
-    # 2. Signature verification
-    norm_headers = {k.lower(): v for k, v in headers.items()}
-    svix_id = norm_headers.get("svix-id") or norm_headers.get("webhook-id")
-    svix_timestamp = norm_headers.get("svix-timestamp") or norm_headers.get("webhook-timestamp")
-    svix_signature = norm_headers.get("svix-signature") or norm_headers.get("webhook-signature")
-
-    signing_secret = settings.email_webhook_signing_secret
-    is_prod = settings.environment.lower() == "production"
-
-    if is_prod and not signing_secret:
-        logger.error("Production inbound webhook rejected: signing secret is not configured")
-        raise WebhookConfigurationError("Webhook signing secret is not configured in production")
-
-    if signing_secret:
-        if not svix_id or not svix_timestamp or not svix_signature:
-            raise InboundWebhookError("Missing Svix signature headers", status_code=400)
-
-        is_valid = verify_svix_signature(
-            body_bytes=body_bytes,
-            headers=headers,
-            secret_value=signing_secret.get_secret_value(),
-        )
-        if not is_valid:
-            logger.warning("Inbound webhook signature verification failed for event %s", svix_id)
-            raise WebhookSignatureVerificationError("Invalid webhook signature")
-
-    # Parse JSON payload
+    # 3. Parse JSON payload
     try:
         payload = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
     except (json.JSONDecodeError, UnicodeDecodeError):
@@ -433,6 +458,9 @@ def process_inbound_email_event(
 
     if not isinstance(payload, dict):
         raise InboundWebhookError("Webhook payload must be a JSON object", status_code=400)
+
+    norm_headers = {k.lower(): v for k, v in headers.items()}
+    svix_id = norm_headers.get("svix-id") or norm_headers.get("webhook-id")
 
     event_type = payload.get("type", "email.received")
     data = payload.get("data", {})
@@ -443,14 +471,14 @@ def process_inbound_email_event(
     if not provider_event_id:
         raise InboundWebhookError("Webhook missing required event identifier", status_code=400)
 
+    email_id = data.get("email_id") or data.get("id")
     provider_message_id = (
         data.get("message_id")
-        or data.get("email_id")
-        or data.get("id")
+        or email_id
         or "unknown"
     )
 
-    # 3. Deduplicate against EmailWebhookEvent
+    # 4. Deduplicate against EmailWebhookEvent
     existing_event = db.scalar(
         select(EmailWebhookEvent).where(
             EmailWebhookEvent.provider == "resend",
@@ -467,7 +495,6 @@ def process_inbound_email_event(
 
     # Only process email.received events in inbound handler
     if event_type != "email.received":
-        # Record non-inbound event audit and return
         event_record = EmailWebhookEvent(
             provider="resend",
             provider_event_id=provider_event_id,
@@ -483,24 +510,143 @@ def process_inbound_email_event(
             db.rollback()
         return {"status": "skipped", "reason": f"unhandled event type {event_type}"}
 
-    # 4. Extract and normalize content
+    # 5. Extract or retrieve actual customer email content
     raw_from = data.get("from")
-    sender_email = normalize_email_address(raw_from)
     subject = (data.get("subject") or "").strip()
-    
-    # Extract text content
     body_text = data.get("text")
-    if not body_text and data.get("html"):
-        body_text = clean_html_to_text(data["html"])
-    if not body_text:
-        body_text = subject or "[Empty inbound message]"
+    raw_html = data.get("html")
 
-    # 5. Entity resolution
+    has_usable_payload_content = bool(
+        (body_text and body_text.strip()) or (raw_html and raw_html.strip())
+    )
+
+    if not has_usable_payload_content:
+        # Documented Resend inbound event is metadata-only. Retrieve actual content from Receiving API.
+        if not email_id:
+            logger.warning("Inbound email event %s missing email_id for content retrieval", provider_event_id)
+            audit_event = EmailWebhookEvent(
+                provider="resend",
+                provider_event_id=provider_event_id,
+                provider_message_id=provider_message_id,
+                event_type=event_type,
+                event_timestamp=datetime.now(UTC),
+                processing_result="REJECTED_MISSING_EMAIL_ID",
+                error_detail="Webhook event has no message body and no email_id for retrieval",
+            )
+            db.add(audit_event)
+            try:
+                db.commit()
+            except IntegrityError:
+                db.rollback()
+            return {
+                "status": "ignored",
+                "reason": "missing_email_id",
+                "provider_event_id": provider_event_id,
+                "confidence": "NONE",
+            }
+
+        rec_provider = receiving_provider or get_receiving_provider()
+        try:
+            retrieved = rec_provider.get_received_email(str(email_id))
+        except EmailProviderError as prov_err:
+            if prov_err.is_transient:
+                logger.warning(
+                    "Transient error retrieving received email %s: %s",
+                    email_id,
+                    str(prov_err),
+                )
+                # DO NOT commit deduplication record so Resend can retry
+                raise InboundWebhookError(
+                    f"Temporary failure retrieving email content: {prov_err.message}",
+                    status_code=503,
+                ) from prov_err
+            else:
+                logger.error(
+                    "Permanent error retrieving received email %s: %s",
+                    email_id,
+                    str(prov_err),
+                )
+                audit_event = EmailWebhookEvent(
+                    provider="resend",
+                    provider_event_id=provider_event_id,
+                    provider_message_id=str(email_id),
+                    event_type=event_type,
+                    event_timestamp=datetime.now(UTC),
+                    processing_result="RETRIEVAL_FAILED_PERMANENT",
+                    error_detail=prov_err.message,
+                )
+                db.add(audit_event)
+                try:
+                    db.commit()
+                except IntegrityError:
+                    db.rollback()
+                return {
+                    "status": "ignored",
+                    "reason": f"retrieval_failed: {prov_err.message}",
+                    "provider_event_id": provider_event_id,
+                    "confidence": "NONE",
+                }
+        except Exception as unk_err:
+            logger.exception("Unexpected error retrieving email %s: %s", email_id, str(unk_err))
+            raise InboundWebhookError(
+                "Unexpected error retrieving email content",
+                status_code=503,
+            ) from unk_err
+
+        # Merge retrieved fields
+        raw_from = retrieved.get("from") or raw_from
+        subject = (retrieved.get("subject") or subject).strip()
+        body_text = retrieved.get("text")
+        raw_html = retrieved.get("html")
+
+        if isinstance(retrieved.get("headers"), dict):
+            curr_headers = dict(data.get("headers") or {})
+            curr_headers.update(retrieved["headers"])
+            data["headers"] = curr_headers
+        if retrieved.get("message_id"):
+            data["message_id"] = retrieved["message_id"]
+
+    # Extract and normalize body text
+    if body_text and body_text.strip():
+        clean_body = body_text.strip()
+    elif raw_html and raw_html.strip():
+        clean_body = clean_html_to_text(raw_html).strip()
+    else:
+        clean_body = ""
+
+    # Validate that clean_body is usable - NEVER substitute subject or placeholder
+    if not clean_body:
+        logger.warning("Inbound email %s has no usable plain-text or HTML body", provider_event_id)
+        audit_event = EmailWebhookEvent(
+            provider="resend",
+            provider_event_id=provider_event_id,
+            provider_message_id=provider_message_id,
+            event_type=event_type,
+            event_timestamp=datetime.now(UTC),
+            processing_result="REJECTED_EMPTY_BODY",
+            error_detail="Email contains no usable plain-text or HTML body",
+        )
+        db.add(audit_event)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+        return {
+            "status": "ignored",
+            "reason": "empty_email_body",
+            "provider_event_id": provider_event_id,
+            "confidence": "NONE",
+        }
+
+    # Normalize sender email address
+    sender_email = normalize_email_address(raw_from)
+
+    # 6. Entity resolution
     match = resolve_inbound_reply(
         db,
         sender_email=sender_email,
         subject=subject,
-        body_text=body_text,
+        body_text=clean_body,
         headers=norm_headers,
         data=data,
     )
@@ -538,7 +684,7 @@ def process_inbound_email_event(
             "confidence": match.match_confidence,
         }
 
-    # 6. Persist inbound CollectionMessage
+    # 7. Persist inbound CollectionMessage
     inbound_message = CollectionMessage(
         organization_id=match.organization_id,
         customer_id=match.customer_id,
@@ -546,7 +692,7 @@ def process_inbound_email_event(
         direction=MessageDirection.INBOUND,
         channel=MessageChannel.EMAIL,
         subject=subject or f"Reply from {sender_email}",
-        body=body_text,
+        body=clean_body,
         status=MessageStatus.RECEIVED,
         created_by_user_id=None,
     )
