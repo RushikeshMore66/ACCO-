@@ -14,7 +14,11 @@ from app.models.collection_workflow import (
 )
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceStatus
-from app.models.reply_analysis import AnalysisStatus, CustomerReplyAnalysis, ReplyClassification
+from app.models.reply_analysis import (
+    AnalysisStatus,
+    CustomerReplyAnalysis,
+    ReplyClassification,
+)
 from app.models.user import User
 from app.schemas.reply_analysis import LLMExtractionResult
 
@@ -108,7 +112,10 @@ def test_service_creates_pending_analysis_without_financial_mutation(db_session,
 
 
 def test_service_rejects_outbound_before_provider(db_session, reply_data):
-    from app.services.customer_reply_intelligence import ReplyAnalysisError, analyze_customer_reply
+    from app.services.customer_reply_intelligence import (
+        ReplyAnalysisError,
+        analyze_customer_reply,
+    )
 
     reply_data["message"].direction = MessageDirection.OUTBOUND
     db_session.commit()

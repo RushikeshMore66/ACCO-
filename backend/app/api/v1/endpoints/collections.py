@@ -11,13 +11,19 @@ from app.models.collection_policy import CollectionPolicy
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceStatus
 from app.models.user import User, UserRole
-from app.schemas.collection_policy import CollectionPolicyResponse, CollectionPolicyUpdate
+from app.schemas.collection_policy import (
+    CollectionPolicyResponse,
+    CollectionPolicyUpdate,
+)
 from app.schemas.collections import (
     CollectionStageSummary,
     CurrencyCollectionSummary,
     ReceivableItemResponse,
 )
-from app.services.collection_policy_engine import evaluate_collection_status, get_effective_policy
+from app.services.collection_policy_engine import (
+    evaluate_collection_status,
+    get_effective_policy,
+)
 from app.services.receivables import get_invoice_balance
 
 router = APIRouter()

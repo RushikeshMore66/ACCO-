@@ -19,7 +19,11 @@ from app.models.invoice import Invoice, InvoiceStatus
 from app.models.payment import Payment
 from app.models.payment_allocation import PaymentAllocation
 from app.models.payment_reversal import PaymentReversal
-from app.models.reply_analysis import AnalysisStatus, CustomerReplyAnalysis, ReplyClassification
+from app.models.reply_analysis import (
+    AnalysisStatus,
+    CustomerReplyAnalysis,
+    ReplyClassification,
+)
 from app.models.user import User, UserRole
 from app.schemas.promises_disputes import (
     DisputeCreate,

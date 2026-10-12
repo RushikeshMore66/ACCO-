@@ -32,7 +32,11 @@ from app.models.customer import Customer
 from app.models.email_delivery import DeliveryStatus, EmailDelivery, EmailWebhookEvent
 from app.models.invoice import Invoice, InvoiceStatus
 from app.models.organization import Organization
-from app.models.reply_analysis import AnalysisStatus, CustomerReplyAnalysis, ReplyClassification
+from app.models.reply_analysis import (
+    AnalysisStatus,
+    CustomerReplyAnalysis,
+    ReplyClassification,
+)
 from app.models.user import User
 from app.schemas.reply_analysis import LLMExtractionResult
 

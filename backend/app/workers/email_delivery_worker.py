@@ -12,10 +12,18 @@ from app.models.collection_workflow import (
     EventType,
     PaymentPromise,
 )
-from app.models.email_delivery import DeliveryStatus, EmailDelivery, EmailDeliveryAttempt
+from app.models.email_delivery import (
+    DeliveryStatus,
+    EmailDelivery,
+    EmailDeliveryAttempt,
+)
 from app.models.invoice import Invoice
 from app.services.collection_pause_service import evaluate_pause_conditions
-from app.services.email_provider import EmailProvider, EmailProviderError, get_email_provider
+from app.services.email_provider import (
+    EmailProvider,
+    EmailProviderError,
+    get_email_provider,
+)
 from app.services.receivables import get_invoice_balance
 
 logger = logging.getLogger(__name__)

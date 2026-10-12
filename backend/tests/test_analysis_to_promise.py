@@ -14,7 +14,11 @@ from app.models.collection_workflow import (
 )
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceStatus
-from app.models.reply_analysis import AnalysisStatus, CustomerReplyAnalysis, ReplyClassification
+from app.models.reply_analysis import (
+    AnalysisStatus,
+    CustomerReplyAnalysis,
+    ReplyClassification,
+)
 from app.models.user import User
 
 
