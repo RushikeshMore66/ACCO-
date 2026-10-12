@@ -1,4 +1,5 @@
-import sys, os
+import sys
+
 sys.path.insert(0, '.')
 
 # Check that the migration chain is valid

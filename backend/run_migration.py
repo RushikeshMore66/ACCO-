@@ -1,9 +1,13 @@
-import sys, os, traceback
+import sys
+import traceback
+
 sys.path.insert(0, '.')
 
-from alembic.config import Config
-from alembic import command
 import logging
+
+from alembic import command
+from alembic.config import Config
+
 logging.basicConfig(level=logging.DEBUG)
 
 cfg = Config('alembic.ini')

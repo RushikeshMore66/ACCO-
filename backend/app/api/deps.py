@@ -1,11 +1,10 @@
 import uuid
+
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from sqlalchemy.orm import Session
-
-from typing import List
 
 from app.core.config import settings
 from app.db.session import get_db
@@ -68,7 +67,7 @@ def get_current_active_user(current_user: User = Depends(get_current_user)) -> U
 def get_current_organization_id(current_user: User = Depends(get_current_user)) -> str:
     return str(current_user.organization_id)
 
-def require_roles(allowed_roles: List[UserRole]):
+def require_roles(allowed_roles: list[UserRole]):
     def role_checker(current_user: User = Depends(get_current_user)) -> User:
         if current_user.role not in allowed_roles:
             raise HTTPException(

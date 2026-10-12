@@ -57,7 +57,7 @@ def analyze_customer_reply(
 
     # Deterministic safeguards run after model output. This analysis is advisory only.
     amount = extraction.explicit_payment_amount
-    if amount is not None and (not amount.is_finite() or amount <= Decimal("0")):
+    if amount is not None and (not amount.is_finite() or amount <= Decimal(0)):
         extraction.explicit_payment_amount = None
         extraction.requires_human_review = True
 

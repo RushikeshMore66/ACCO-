@@ -1,20 +1,27 @@
 from datetime import datetime
-from typing import List, Optional
+
 from pydantic import BaseModel
+
 from app.models.collection_policy import CollectionPolicy
-from app.models.collection_workflow import CollectionDispute, PaymentPromise, DisputeStatus, PromiseStatus
+from app.models.collection_workflow import (
+    CollectionDispute,
+    DisputeStatus,
+    PaymentPromise,
+    PromiseStatus,
+)
+
 
 class PauseResult(BaseModel):
     is_paused: bool
-    pause_reasons: List[str]
+    pause_reasons: list[str]
     active_dispute_count: int
     active_promise_count: int
     requires_follow_up: bool
 
 def evaluate_pause_conditions(
-    policy: Optional[CollectionPolicy],
-    disputes: List[CollectionDispute],
-    promises: List[PaymentPromise],
+    policy: CollectionPolicy | None,
+    disputes: list[CollectionDispute],
+    promises: list[PaymentPromise],
     as_of_date: datetime
 ) -> PauseResult:
     is_paused = False

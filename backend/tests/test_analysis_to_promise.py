@@ -1,5 +1,5 @@
 """Tests for linking Agent 09 CustomerReplyAnalysis to Agent 10 PaymentPromise"""
-from datetime import UTC, datetime, date, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -11,11 +11,14 @@ from app.models.collection_workflow import (
     MessageDirection,
     MessageStatus,
     PaymentPromise,
-    PromiseStatus,
 )
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceStatus
-from app.models.reply_analysis import AnalysisStatus, CustomerReplyAnalysis, ReplyClassification
+from app.models.reply_analysis import (
+    AnalysisStatus,
+    CustomerReplyAnalysis,
+    ReplyClassification,
+)
 from app.models.user import User
 
 

@@ -1,11 +1,11 @@
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.payment import PaymentMethod
+
 
 class PaymentCreate(BaseModel):
     customer_id: uuid.UUID
@@ -13,8 +13,8 @@ class PaymentCreate(BaseModel):
     currency: str = Field(..., min_length=3, max_length=3, pattern=r"^[A-Z]{3}$")
     payment_date: date
     payment_method: PaymentMethod
-    reference: Optional[str] = Field(None, max_length=255)
-    notes: Optional[str] = None
+    reference: str | None = Field(None, max_length=255)
+    notes: str | None = None
 
 
 class PaymentAllocationCreate(BaseModel):
@@ -52,8 +52,8 @@ class PaymentResponse(BaseModel):
     currency: str
     payment_date: date
     payment_method: PaymentMethod
-    reference: Optional[str]
-    notes: Optional[str]
+    reference: str | None
+    notes: str | None
     created_at: datetime
     
     # Derived fields for response
@@ -61,6 +61,6 @@ class PaymentResponse(BaseModel):
     unallocated_amount: Decimal = Decimal("0.00")
     
     allocations: list[PaymentAllocationResponse] = []
-    reversal: Optional[PaymentReversalResponse] = None
+    reversal: PaymentReversalResponse | None = None
 
     model_config = ConfigDict(from_attributes=True)

@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from app.models.organization import Organization
 from app.models.user import User, UserRole
 
+
 def test_insert_and_query_organization(db_session):
     org = Organization(name="Test Org", slug="test-org")
     db_session.add(org)

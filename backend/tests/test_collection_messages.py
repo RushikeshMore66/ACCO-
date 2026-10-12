@@ -1,11 +1,13 @@
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, UTC
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.models.invoice import Invoice, InvoiceStatus
 from app.models.customer import Customer
+from app.models.invoice import Invoice, InvoiceStatus
 from app.models.user import User
+
 
 @pytest.fixture
 def setup_data(db_session: Session, normal_user_token_headers):

@@ -1,17 +1,19 @@
-from datetime import date, datetime
-from typing import Optional
 import uuid
+from datetime import date, datetime
 from decimal import Decimal
+
 from pydantic import BaseModel, ConfigDict
-from app.models.collection_workflow import PromiseStatus, DisputeCategory, DisputeStatus
+
+from app.models.collection_workflow import DisputeCategory, DisputeStatus, PromiseStatus
+
 
 class PromiseCreate(BaseModel):
     promised_amount: Decimal
     expected_payment_date: date
-    follow_up_date: Optional[date] = None
-    source_message_id: Optional[uuid.UUID] = None
-    reply_analysis_id: Optional[uuid.UUID] = None
-    notes: Optional[str] = None
+    follow_up_date: date | None = None
+    source_message_id: uuid.UUID | None = None
+    reply_analysis_id: uuid.UUID | None = None
+    notes: str | None = None
 
 class PromiseCancel(BaseModel):
     cancellation_reason: str
@@ -25,13 +27,13 @@ class PromiseResponse(BaseModel):
     expected_payment_date: date
     follow_up_date: date
     status: PromiseStatus
-    recorded_by_user_id: Optional[uuid.UUID]
-    source_message_id: Optional[uuid.UUID]
-    reply_analysis_id: Optional[uuid.UUID]
-    notes: Optional[str]
+    recorded_by_user_id: uuid.UUID | None
+    source_message_id: uuid.UUID | None
+    reply_analysis_id: uuid.UUID | None
+    notes: str | None
     created_at: datetime
     updated_at: datetime
-    resolved_at: Optional[datetime]
+    resolved_at: datetime | None
     model_config = ConfigDict(from_attributes=True)
 
 class DisputeCreate(BaseModel):
@@ -51,10 +53,10 @@ class DisputeResponse(BaseModel):
     category: DisputeCategory
     description: str
     status: DisputeStatus
-    opened_by_user_id: Optional[uuid.UUID]
-    resolved_by_user_id: Optional[uuid.UUID]
-    resolution_notes: Optional[str]
+    opened_by_user_id: uuid.UUID | None
+    resolved_by_user_id: uuid.UUID | None
+    resolution_notes: str | None
     created_at: datetime
     updated_at: datetime
-    resolved_at: Optional[datetime]
+    resolved_at: datetime | None
     model_config = ConfigDict(from_attributes=True)

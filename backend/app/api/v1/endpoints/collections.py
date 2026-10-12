@@ -1,20 +1,30 @@
-from datetime import datetime, UTC
-from typing import Any, List
 import uuid
+from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, require_roles
-from app.models.user import User, UserRole
 from app.models.collection_policy import CollectionPolicy
-from app.models.invoice import Invoice, InvoiceStatus
 from app.models.customer import Customer
-from app.schemas.collection_policy import CollectionPolicyResponse, CollectionPolicyUpdate
-from app.schemas.collections import ReceivableItemResponse, CurrencyCollectionSummary, CollectionStageSummary
+from app.models.invoice import Invoice, InvoiceStatus
+from app.models.user import User, UserRole
+from app.schemas.collection_policy import (
+    CollectionPolicyResponse,
+    CollectionPolicyUpdate,
+)
+from app.schemas.collections import (
+    CollectionStageSummary,
+    CurrencyCollectionSummary,
+    ReceivableItemResponse,
+)
+from app.services.collection_policy_engine import (
+    evaluate_collection_status,
+    get_effective_policy,
+)
 from app.services.receivables import get_invoice_balance
-from app.services.collection_policy_engine import evaluate_collection_status, get_effective_policy
 
 router = APIRouter()
 
@@ -69,9 +79,15 @@ def update_policy(
     db.refresh(policy)
     return policy
 
-from app.models.collection_workflow import CollectionDispute, PaymentPromise, DisputeStatus, PromiseStatus
+from app.models.collection_workflow import (
+    CollectionDispute,
+    DisputeStatus,
+    PaymentPromise,
+    PromiseStatus,
+)
 
-@router.get("/queue", response_model=List[ReceivableItemResponse])
+
+@router.get("/queue", response_model=list[ReceivableItemResponse])
 def get_collection_queue(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -162,7 +178,7 @@ def get_collection_queue(
     return queue[offset : offset + limit]
 
 
-@router.get("/summary", response_model=List[CurrencyCollectionSummary])
+@router.get("/summary", response_model=list[CurrencyCollectionSummary])
 def get_collection_summary(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

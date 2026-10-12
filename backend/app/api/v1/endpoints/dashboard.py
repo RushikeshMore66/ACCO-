@@ -1,18 +1,22 @@
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from decimal import Decimal
+
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_roles
-from app.models.user import User, UserRole
-from app.models.invoice import Invoice, InvoiceStatus
-from app.models.customer import Customer
 from app.models.collection_workflow import (
-    CollectionDispute, PaymentPromise, DisputeStatus, PromiseStatus
+    CollectionDispute,
+    DisputeStatus,
+    PaymentPromise,
+    PromiseStatus,
 )
-from app.models.reply_analysis import CustomerReplyAnalysis, AnalysisStatus
-from app.schemas.dashboard import DashboardSummaryResponse, CurrencyKpi, AttentionItem
+from app.models.customer import Customer
+from app.models.invoice import Invoice, InvoiceStatus
+from app.models.reply_analysis import AnalysisStatus, CustomerReplyAnalysis
+from app.models.user import User, UserRole
+from app.schemas.dashboard import AttentionItem, CurrencyKpi, DashboardSummaryResponse
 from app.services.receivables import get_invoice_balance
 
 router = APIRouter()
@@ -96,7 +100,7 @@ def get_dashboard_summary(
                     amount=p.promised_amount,
                     currency=p.currency,
                     priority="urgent",
-                    link=f"/collections/promises"
+                    link="/collections/promises"
                 ))
             else:
                 active_promises_count += 1
@@ -122,7 +126,7 @@ def get_dashboard_summary(
             amount=None,
             currency=None,
             priority="high",
-            link=f"/collections/disputes"
+            link="/collections/disputes"
         ))
 
     # 4. Reply Analyses awaiting human review
