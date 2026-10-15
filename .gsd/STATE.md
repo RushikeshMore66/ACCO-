@@ -60,20 +60,29 @@ All baseline and Task 0.1 verification checks passed with zero regressions:
 
 ---
 
-## 5. Next Exact Task to Execute
- 
-```
-▶ CURRENT: Phase 0 — Task 0.1 Completed & Verified
-Task 0.1 implementation and test verification are complete (101/101 backend tests passing).
-Atomic commit paused per Section 8 protocol awaiting authorization to commit Milestone 2C/2C.1 or stage in unified sequence.
+## 5. Evidence Log (2026-10-15, actual runs)
 
-▶ NEXT UP: Phase 0 — Task 0.2
-Task: RBAC Schema Expansion & ADMIN Role Migration
-Objective: Add ADMIN role to UserRole enum in model, Alembic migration, and endpoint authorization dependencies.
-Target Files: backend/app/models/user.py, backend/migrations/versions/, backend/app/api/deps.py
-```
+| Check | Result |
+| :--- | :--- |
+| T-1.1 git reconcile | Committed locally: `49bd7a1` (2C/2C.1 DB lifecycle), `60264ce` (Task 0.1 config, partial), `51be862` (docs/.gsd). 3 old-doc deletions (`development.md`, `inbound-email-operations.md`, `launch-readiness-review.md`) and 4 empty-spec deletions intentionally **left unstaged** for owner decision. |
+| T-1.2 backend pytest | **101 passed**, 1 warning (SQLite) |
+| backend `ruff check app tests migrations` | **FAIL: 406 baseline errors** (224 auto-fixable) - pre-existing, not task-caused; CI lint step cannot be green until cleaned |
+| backend `ruff format --check` | **Ruff panicked** (internal crash in renderer; baseline files unformatted) - unresolved tooling issue |
+| frontend | `npm test` 135 passed / 19 files; typecheck, lint clean; build OK |
+| T-1.3 PG tests | `pytest tests/pg` against local PG16 DB `acco_test`: **7 passed** (single head, upgrade from empty, downgrade base + re-upgrade, enum cleanup, no float columns, NUMERIC money columns, timestamptz). Suite: 102 passed / 6 skipped without URL. |
+| T-1.3 CI | `postgres:16` + `redis:7` services and `tests/pg` step added; YAML parses, **not run on GitHub (unverified)** |
 
----
+**Findings:** (1) model/migration drift in `collection_policies`, `payment_reversals` unique constraint vs index (recorded as `KNOWN_DRIFT` in test; fix pending). (2) `customer_reply_analyses.confidence_score` is `double precision` (AI probability, not money; allow-listed). (3) docs vs `.gsd` differences: ROADMAP lacks Phase -1; its Phases 1-4, task 0.4 (no email verification), 0.10 (no DB-privilege audit block) and 0.1 (CORS) diverge from `docs/tasks.md`; docs win.
+
+**Local PG test run:** create DB `acco_test`; set `ACCO_TEST_DATABASE_URL=postgresql+psycopg://<user>:<pw>@localhost:5432/acco_test`; `.env\Scripts\pytest.exe tests/pg -v`. Harness refuses non-`_test` names and hosted hosts and wipes the `public` schema.
+
+## 5a. Next Exact Task
+
+```
+DONE: T-1.1, T-1.2, T-1.3 (local). Task 0.1 remains PARTIAL per docs gate:
+  needs real-Redis broker integration test (CI Redis service now present).
+NEXT: finish Task 0.1, then decide on the 406 ruff baseline errors / ruff format crash.
+```
 
 ## 6. Risks & Watch Items
 

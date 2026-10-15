@@ -39,6 +39,7 @@ include = ["app*"]
 testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
+markers = ["postgres: requires an isolated PostgreSQL database (ACCO_TEST_DATABASE_URL)"]
 
 [tool.ruff]
 line-length = 100
