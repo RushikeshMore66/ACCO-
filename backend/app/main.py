@@ -3,28 +3,28 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.v1.router import api_router
-from app.core.config import settings
+from app.core.config import settings, validate_settings
 from app.db.session import dispose_engine
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Dispose database resources gracefully on shutdown."""
+    """Application lifespan manager ensuring configuration is valid and database resources are disposed gracefully."""
     try:
+        validate_settings(settings)
         yield
     finally:
         dispose_engine()
 
+
 app = FastAPI(
-    lifespan=lifespan,
     title=settings.app_name,
-    description=(
-        "ACCO is an AI-assisted accounts receivable "
-        "and collections management platform."
-    ),
+    description=("ACCO is an AI-assisted accounts receivable and collections management platform."),
     version="0.1.0",
+    lifespan=lifespan,
 )
 app.include_router(api_router, prefix=settings.api_v1_prefix)
+
 
 @app.get("/", tags=["General"])
 def read_root() -> dict[str, str]:
@@ -63,7 +63,7 @@ def readiness_check() -> dict[str, str]:
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-    except Exception:
+    except Exception:  # noqa: BLE001
         raise HTTPException(
             status_code=503,
             detail="Database is unreachable.",
@@ -74,4 +74,3 @@ def readiness_check() -> dict[str, str]:
         "service": settings.app_name,
         "database": "reachable",
     }
-

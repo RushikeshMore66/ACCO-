@@ -16,8 +16,11 @@ jobs:
       run:
         working-directory: backend
     env:
+      ACCO_ENVIRONMENT: test
       ACCO_DATABASE_URL: sqlite:///./ci.db
-      ACCO_SECRET_KEY: ci-only-secret-key-that-is-not-used-outside-tests
+      ACCO_JWT_SECRET_KEY: ci-only-synthetic-jwt-secret-key-for-testing-only-32chars
+      ACCO_EMAIL_WEBHOOK_SIGNING_SECRET: ci-only-synthetic-webhook-signing-secret
+      ACCO_CELERY_BROKER_URL: redis://localhost:6379/0
       ACCO_OPENAI_API_KEY: ""
     steps:
       - name: Checkout
