@@ -4,6 +4,20 @@ from functools import lru_cache
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+MIN_JWT_SECRET_LENGTH = 32
+
+# Example/placeholder values that must never be accepted outside development.
+_PLACEHOLDER_EXACT = frozenset(
+    {"secret", "password", "changeme", "change_me", "test", "default", "jwt_secret"}
+)
+_PLACEHOLDER_MARKERS = ("replace_this", "change_me", "changeme", "your_secret", "your-secret")
+
+
+def _is_placeholder_secret(value: str) -> bool:
+    """Return True for known example/development-only secret values."""
+    normalised = value.strip().lower()
+    return normalised in _PLACEHOLDER_EXACT or any(m in normalised for m in _PLACEHOLDER_MARKERS)
+
 
 class ConfigurationError(RuntimeError):
     """Raised when application configuration is invalid or missing required security settings."""
@@ -84,6 +98,18 @@ class Settings(BaseSettings):
             errors.append(
                 "ACCO_JWT_SECRET_KEY is required and cannot be blank in non-development environments."
             )
+        else:
+            jwt_secret = self.jwt_secret_key.strip()
+            if _is_placeholder_secret(jwt_secret):
+                errors.append(
+                    "ACCO_JWT_SECRET_KEY is a known placeholder/example value and is not "
+                    "permitted in non-development environments."
+                )
+            elif len(jwt_secret) < MIN_JWT_SECRET_LENGTH:
+                errors.append(
+                    f"ACCO_JWT_SECRET_KEY must be at least {MIN_JWT_SECRET_LENGTH} characters "
+                    "in non-development environments."
+                )
 
         # 2. Database URL
         if not self.database_url or not self.database_url.strip():
@@ -101,6 +127,11 @@ class Settings(BaseSettings):
         if not webhook_secret or not webhook_secret.strip():
             errors.append(
                 "ACCO_EMAIL_WEBHOOK_SIGNING_SECRET is required and cannot be blank in non-development environments."
+            )
+        elif _is_placeholder_secret(webhook_secret):
+            errors.append(
+                "ACCO_EMAIL_WEBHOOK_SIGNING_SECRET is a known placeholder/example value and is "
+                "not permitted in non-development environments."
             )
 
         # 4. Celery broker URL

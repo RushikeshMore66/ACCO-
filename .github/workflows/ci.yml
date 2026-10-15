@@ -12,6 +12,7 @@ permissions:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16
@@ -69,3 +70,8 @@ jobs:
         env:
           ACCO_TEST_DATABASE_URL: postgresql+psycopg://acco:ci-only-synthetic-password@localhost:5432/acco_test
         run: pytest tests/pg -v
+      - name: Real Redis broker integration test (Celery publish -> worker consume)
+        timeout-minutes: 5
+        env:
+          ACCO_TEST_REDIS_URL: redis://localhost:6379/15
+        run: pytest tests/redis_integration -v

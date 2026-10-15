@@ -217,3 +217,54 @@ def test_existing_health_and_readiness_with_valid_settings():
         res_ready = test_client.get("/api/v1/health/ready")
         assert res_ready.status_code == 200
         assert res_ready.json()["database"] == "reachable"
+
+
+def test_short_jwt_secret_rejected_in_non_dev():
+    """JWT secrets shorter than 32 characters are rejected outside development."""
+    s = _make_valid_non_dev_settings(jwt_secret_key="a" * 31)
+    with pytest.raises(ConfigurationError) as exc_info:
+        validate_settings(s)
+    assert "at least 32 characters" in str(exc_info.value)
+    assert "a" * 31 not in str(exc_info.value)
+
+
+def test_jwt_secret_at_minimum_length_accepted():
+    """A 32-character synthetic secret is accepted."""
+    validate_settings(_make_valid_non_dev_settings(jwt_secret_key="k" * 32))
+
+
+@pytest.mark.parametrize(
+    "placeholder",
+    [
+        "replace_this_with_a_long_random_string",
+        "REPLACE_THIS_WITH_A_LONG_RANDOM_STRING",
+        "secret",
+        "  secret  ",
+        "changeme",
+        "prefix-change_me-and-padding-to-be-long-enough",
+    ],
+)
+def test_placeholder_jwt_secret_rejected_in_non_dev(placeholder):
+    """Known example/placeholder JWT secrets are rejected outside development."""
+    s = _make_valid_non_dev_settings(jwt_secret_key=placeholder)
+    with pytest.raises(ConfigurationError) as exc_info:
+        validate_settings(s)
+    assert "known placeholder" in str(exc_info.value)
+
+
+def test_placeholder_webhook_secret_rejected_in_non_dev():
+    """Placeholder webhook signing secrets are rejected outside development."""
+    s = _make_valid_non_dev_settings(email_webhook_signing_secret=SecretStr("changeme"))
+    with pytest.raises(ConfigurationError) as exc_info:
+        validate_settings(s)
+    assert "ACCO_EMAIL_WEBHOOK_SIGNING_SECRET is a known placeholder" in str(exc_info.value)
+
+
+def test_development_allows_placeholder_and_short_secrets():
+    """Development stays lenient so local setup works with .env.example values."""
+    s = Settings(
+        _env_file=None,
+        environment="development",
+        jwt_secret_key="replace_this_with_a_long_random_string",
+    )
+    assert validate_settings(s) is s
