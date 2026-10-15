@@ -76,16 +76,19 @@ All baseline and Task 0.1 verification checks passed with zero regressions:
 
 **Local PG test run:** create DB `acco_test`; set `ACCO_TEST_DATABASE_URL=postgresql+psycopg://<user>:<pw>@localhost:5432/acco_test`; `.env\Scripts\pytest.exe tests/pg -v`. Harness refuses non-`_test` names and hosted hosts and wipes the `public` schema.
 
-## 5a. Next Exact Task
+## 5a. Task 0.1 Completion Evidence (2026-10-15)
 
-```
-DONE: T-1.1, T-1.2, T-1.3 (local). Task 0.1 remains PARTIAL per docs gate:
-  needs real-Redis broker integration test (CI Redis service now present).
-NEXT: finish Task 0.1, then decide on the 406 ruff baseline errors / ruff format crash.
-```
+- Secret rules (non-development): JWT secret >= 32 chars and not a placeholder; webhook secret not a placeholder; Redis broker `redis://`/`rediss://` with host. Placeholders: exact `secret/password/changeme/change_me/test/default/jwt_secret` or containing `replace_this/change_me/changeme/your_secret/your-secret`. `docs/` give no numeric minimums ("missing/invalid" only); the 32-char/placeholder rules come from `.gsd/SPEC.md`/`ROADMAP.md` - **owner to confirm**. Webhook length minimum intentionally not invented.
+- Real Redis test: `tests/redis_integration` (marker `redis_integration`), needs `ACCO_TEST_REDIS_URL` (loopback host, non-zero DB). Publishes a synthetic task to a unique queue via the real ACCO `celery_app`, asserts the message sits in Redis (`LLEN`==1), runs a real in-process `solo` worker, asserts result + `LLEN`==0 + result key, cleans only own keys. Unset -> skip; unreachable -> fail. **Passed locally against Redis 5.0.14 using redis-py 5.3.1** (see risk R4).
+- Lint: baseline at 7270aa3 was 408 ruff errors + 80 unformatted files; `ruff format` crash was a BOM-only `tests/__init__.py` (ruff 0.16.10 panic while rendering the diff). Now `ruff check` and `ruff format --check` pass.
+- Results: backend 120 passed (with PG+Redis URLs) / 112 passed, 8 skipped (without); frontend 135 passed, typecheck/lint/build clean.
+- Commits: `3423a7f` (secrets + Redis test + CI), `feebd4b` (ruff config, BOM file), `6db90b5` (lint fixes), `7c25453` (format).
+- CI: workflow edited (Redis step, timeouts); **not run on GitHub - unverified**.
 
 ## 6. Risks & Watch Items
 
 1. **PostgreSQL RLS in SQLite Test Suite**: SQLite does not support PostgreSQL-specific RLS statements (`CREATE POLICY`, `current_setting`). Migrations and session hooks must check the active dialect and apply RLS statements conditionally or provide separate integration test harnesses for PostgreSQL.
 2. **Account Lockout on MFA Loss**: If an `OWNER` loses their TOTP device and backup codes, an administrative recovery mechanism must exist (e.g., secondary owner verification or CLI recovery token script) to prevent permanent tenant abandonment.
 3. **Pessimistic Concurrency on Invoices**: High-volume concurrent payment webhook ingestion requires row-level locks (`SELECT FOR UPDATE`) on target invoices to prevent balance decrement race conditions.
+4. **R4 redis-py vs old Redis**: redis-py 8.1 (current venv) sends RESP3 `HELLO` and fails against Redis < 6 (local Windows Redis 5.0.14); Celery/kombu cannot set the protocol. CI uses `redis:7`. Use Redis >= 6 outside this machine, or pin `redis<6` if older servers must be supported.
+5. **Result backend**: default `cache+memory://` is not rejected in non-dev (broker is). Decide under Phase 0 follow-up.
