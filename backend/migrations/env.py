@@ -21,7 +21,7 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
-    url = settings.database_url
+    url = settings.database_direct_url or settings.database_url
     if not url:
         raise RuntimeError("Database URL is not configured. Alembic cannot proceed.")
     return url

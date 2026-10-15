@@ -1,9 +1,22 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from app.api.v1.router import api_router
 from app.core.config import settings
+from app.db.session import dispose_engine
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Dispose database resources gracefully on shutdown."""
+    try:
+        yield
+    finally:
+        dispose_engine()
 
 app = FastAPI(
+    lifespan=lifespan,
     title=settings.app_name,
     description=(
         "ACCO is an AI-assisted accounts receivable "

@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from app.models.organization import Organization
 from app.models.user import User, UserRole
 
+
 def test_insert_and_query_organization(db_session):
     org = Organization(name="Test Org", slug="test-org")
     db_session.add(org)
@@ -67,3 +68,109 @@ def test_readiness_endpoint_ok(client):
         response = client.get("/api/v1/health/ready")
         assert response.status_code == 200
         assert response.json()["database"] == "reachable"
+
+
+def test_build_engine_postgresql_includes_keepalives():
+    """Verify PostgreSQL connections receive keepalives and connect timeouts."""
+    from app.db.session import _build_engine
+    with patch("app.db.session.create_engine") as mock_ce:
+        _build_engine("postgresql+psycopg://user:pass@localhost:5432/db")
+        mock_ce.assert_called_once()
+        _, kwargs = mock_ce.call_args
+        assert kwargs["pool_pre_ping"] is True
+        assert kwargs["connect_args"]["keepalives"] == 1
+        assert kwargs["connect_args"]["connect_timeout"] == 10
+        assert kwargs["pool_size"] == 5
+        assert kwargs["max_overflow"] == 5
+        assert kwargs["pool_recycle"] == 300
+        assert kwargs["pool_timeout"] == 15.0
+
+
+def test_build_engine_sqlite_omits_unsupported_pg_args():
+    """Verify SQLite connections do NOT receive PostgreSQL-specific connect_args."""
+    from app.db.session import _build_engine
+    with patch("app.db.session.create_engine") as mock_ce:
+        _build_engine("sqlite:///:memory:")
+        mock_ce.assert_called_once()
+        _, kwargs = mock_ce.call_args
+        assert kwargs["connect_args"] == {}
+
+
+def test_settings_database_pool_validation():
+    """Verify Settings validates database pool bounds."""
+    from pydantic import ValidationError
+
+    from app.core.config import Settings
+    
+    valid_settings = Settings(database_pool_size=10, database_max_overflow=5)
+    assert valid_settings.database_pool_size == 10
+
+    with pytest.raises(ValidationError):
+        Settings(database_pool_size=0)  # ge=1
+
+    with pytest.raises(ValidationError):
+        Settings(database_pool_size=100)  # le=50
+
+
+def test_dispose_engine_argument_forwarding():
+    """Verify dispose_engine passes the close argument to engine.dispose."""
+    from app.db.session import dispose_engine
+
+    # Default call should pass close=True
+    mock_engine = MagicMock()
+    with patch("app.db.session.engine", mock_engine):
+        dispose_engine()
+        mock_engine.dispose.assert_called_once_with(close=True)
+
+    # Explicit close=False (used by post-fork child init)
+    mock_engine = MagicMock()
+    with patch("app.db.session.engine", mock_engine):
+        dispose_engine(close=False)
+        mock_engine.dispose.assert_called_once_with(close=False)
+
+    # Explicit close=True (used by worker shutdown)
+    mock_engine = MagicMock()
+    with patch("app.db.session.engine", mock_engine):
+        dispose_engine(close=True)
+        mock_engine.dispose.assert_called_once_with(close=True)
+
+    # When engine is None, should safely no-op without error
+    with patch("app.db.session.engine", None):
+        dispose_engine(close=False)
+
+
+def test_celery_worker_process_init_disposes_without_closing():
+    """Verify Celery worker child initialization requests pool disposal with close=False."""
+    from app.workers.celery_app import on_worker_process_init
+    with patch("app.db.session.dispose_engine") as mock_disp:
+        on_worker_process_init()
+        mock_disp.assert_called_once_with(close=False)
+
+
+def test_celery_worker_process_shutdown_disposes_with_closing():
+    """Verify Celery worker shutdown requests pool disposal with close=True."""
+    from app.workers.celery_app import on_worker_process_shutdown
+    with patch("app.db.session.dispose_engine") as mock_disp:
+        on_worker_process_shutdown()
+        mock_disp.assert_called_once_with(close=True)
+
+
+@pytest.mark.asyncio
+async def test_fastapi_lifespan_cleanup_normal_shutdown():
+    """Verify FastAPI lifespan executes engine disposal on normal application shutdown."""
+    from app.main import app, lifespan
+    with patch("app.main.dispose_engine") as mock_disp:
+        async with lifespan(app):
+            mock_disp.assert_not_called()
+        mock_disp.assert_called_once_with()
+
+
+@pytest.mark.asyncio
+async def test_fastapi_lifespan_cleanup_on_exception():
+    """Verify FastAPI lifespan executes engine disposal in finally block when an exception occurs."""
+    from app.main import app, lifespan
+    with patch("app.main.dispose_engine") as mock_disp:
+        with pytest.raises(RuntimeError, match="Simulated lifespan crash"):
+            async with lifespan(app):
+                raise RuntimeError("Simulated lifespan crash")
+        mock_disp.assert_called_once_with()

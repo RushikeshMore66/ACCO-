@@ -1,5 +1,6 @@
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import worker_process_init, worker_process_shutdown
 
 from app.core.config import settings
 
@@ -34,3 +35,21 @@ celery_app.conf.update(
         },
     }
 )
+
+
+@worker_process_init.connect
+def on_worker_process_init(**kwargs) -> None:
+    """
+    Ensure each prefork child worker gets a fresh connection pool.
+    Disposing inherited parent engine with close=False replaces the pool
+    without closing connections owned by the parent process.
+    """
+    from app.db.session import dispose_engine
+    dispose_engine(close=False)
+
+
+@worker_process_shutdown.connect
+def on_worker_process_shutdown(**kwargs) -> None:
+    """Cleanly close all database connections when worker child process terminates."""
+    from app.db.session import dispose_engine
+    dispose_engine(close=True)
