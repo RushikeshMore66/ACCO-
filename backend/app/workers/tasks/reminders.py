@@ -2,20 +2,21 @@
 Celery tasks for email delivery processing and receivable reminders evaluation.
 """
 import logging
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
-from app.workers.celery_app import celery_app
-from app.workers.email_delivery_worker import process_batch
-from app.models.invoice import Invoice, InvoiceStatus
 from app.models.collection_policy import CollectionPolicy
 from app.models.collection_workflow import (
-    CollectionDispute, PaymentPromise, CollectionActivity, EventType
+    CollectionDispute,
+    PaymentPromise,
 )
-from app.services.receivables import get_invoice_balance
+from app.models.invoice import Invoice, InvoiceStatus
 from app.services.collection_pause_service import evaluate_pause_conditions
+from app.services.receivables import get_invoice_balance
+from app.workers.celery_app import celery_app
+from app.workers.email_delivery_worker import process_batch
 
 logger = logging.getLogger(__name__)
 

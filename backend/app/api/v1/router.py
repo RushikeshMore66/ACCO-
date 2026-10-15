@@ -1,19 +1,19 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
-    health,
     auth,
-    customers,
-    invoices,
-    payments,
-    receivables,
     collections,
     collections_messages,
-    promises_disputes,
+    customers,
+    dashboard,
     email_deliveries,
+    health,
+    invoices,
+    payments,
+    promises_disputes,
+    receivables,
     reply_analyses,
     webhooks,
-    dashboard,
 )
 
 api_router = APIRouter()

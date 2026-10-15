@@ -1,6 +1,8 @@
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
+
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
+
 
 def test_get_default_policy(client: TestClient, db_session: Session, normal_user_token_headers: dict[str, str]):
     r = client.get("/api/v1/collections/policy", headers=normal_user_token_headers)
@@ -222,9 +224,11 @@ def test_sweep_expired_promises(client: TestClient, db_session: Session, normal_
 
     # Create promise expected in the past
     import uuid
+
     from sqlalchemy import select
-    from app.models.customer import Customer
+
     from app.models.collection_workflow import PaymentPromise, PromiseStatus
+    from app.models.customer import Customer
     past_date = (now - timedelta(days=5)).date()
     cust_uuid = uuid.UUID(cust_id)
     inv_uuid = uuid.UUID(inv_id)

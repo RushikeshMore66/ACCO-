@@ -2,11 +2,13 @@
 Email provider abstraction and adapters.
 Provides idempotent dispatch with provider message tracking and error categorization.
 """
-from typing import Optional, Protocol, runtime_checkable
 import uuid
+from typing import Protocol, runtime_checkable
+
 import httpx
 
 from app.core.config import settings
+
 
 class EmailProviderError(Exception):
     def __init__(self, message: str, error_code: str = "PROVIDER_ERROR", is_transient: bool = False):
@@ -24,7 +26,7 @@ class EmailProvider(Protocol):
         subject: str,
         body: str,
         idempotency_key: str,
-        from_email: Optional[str] = None
+        from_email: str | None = None
     ) -> dict:
         """
         Dispatches email. Returns dictionary with at least 'provider_message_id'.
@@ -34,7 +36,7 @@ class EmailProvider(Protocol):
 
 
 class ResendEmailProvider:
-    def __init__(self, api_key: Optional[str] = None, default_from: Optional[str] = None):
+    def __init__(self, api_key: str | None = None, default_from: str | None = None):
         self.api_key = api_key or settings.resend_api_key
         self.default_from = default_from or getattr(settings, "default_from_email", "billing@acco.app")
 
@@ -44,7 +46,7 @@ class ResendEmailProvider:
         subject: str,
         body: str,
         idempotency_key: str,
-        from_email: Optional[str] = None
+        from_email: str | None = None
     ) -> dict:
         if not self.api_key:
             raise EmailProviderError(
@@ -74,7 +76,7 @@ class ResendEmailProvider:
                 )
         except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
             raise EmailProviderError(
-                f"Network error contacting Resend: {str(exc)}",
+                f"Network error contacting Resend: {exc!s}",
                 error_code="NETWORK_TIMEOUT",
                 is_transient=True
             ) from exc
@@ -111,7 +113,7 @@ class MockEmailProvider:
         subject: str,
         body: str,
         idempotency_key: str,
-        from_email: Optional[str] = None
+        from_email: str | None = None
     ) -> dict:
         if self.simulate_transient_error:
             raise EmailProviderError(self.error_message, error_code="SIMULATED_TRANSIENT", is_transient=True)
@@ -131,17 +133,16 @@ class MockEmailProvider:
         return {"provider_message_id": provider_message_id}
 
 
-_global_provider: Optional[EmailProvider] = None
+_global_provider: EmailProvider | None = None
 
 def get_email_provider() -> EmailProvider:
-    global _global_provider
     if _global_provider is not None:
         return _global_provider
     if settings.resend_api_key:
         return ResendEmailProvider()
     return MockEmailProvider()
 
-def set_email_provider(provider: Optional[EmailProvider]) -> None:
+def set_email_provider(provider: EmailProvider | None) -> None:
     global _global_provider
     _global_provider = provider
 
@@ -158,7 +159,7 @@ class EmailReceivingProvider(Protocol):
 
 
 class ResendReceivingProvider:
-    def __init__(self, api_key: Optional[str] = None, base_url: str = "https://api.resend.com"):
+    def __init__(self, api_key: str | None = None, base_url: str = "https://api.resend.com"):
         self.api_key = api_key or (
             settings.resend_api_key.get_secret_value() if settings.resend_api_key else None
         )
@@ -183,7 +184,7 @@ class ResendReceivingProvider:
                 response = client.get(url, headers=headers)
         except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
             raise EmailProviderError(
-                f"Network error contacting Resend receiving API: {str(exc)}",
+                f"Network error contacting Resend receiving API: {exc!s}",
                 error_code="NETWORK_TIMEOUT",
                 is_transient=True,
             ) from exc
@@ -243,7 +244,7 @@ class ResendReceivingProvider:
 
 
 class MockReceivingProvider:
-    def __init__(self, emails: Optional[dict[str, dict]] = None):
+    def __init__(self, emails: dict[str, dict] | None = None):
         self.emails: dict[str, dict] = dict(emails) if emails else {}
         self.calls: list[str] = []
         self.simulate_transient_error = False
@@ -273,17 +274,16 @@ class MockReceivingProvider:
         return self.emails[email_id]
 
 
-_global_receiving_provider: Optional[EmailReceivingProvider] = None
+_global_receiving_provider: EmailReceivingProvider | None = None
 
 def get_receiving_provider() -> EmailReceivingProvider:
-    global _global_receiving_provider
     if _global_receiving_provider is not None:
         return _global_receiving_provider
     if settings.resend_api_key:
         return ResendReceivingProvider()
     return MockReceivingProvider()
 
-def set_receiving_provider(provider: Optional[EmailReceivingProvider]) -> None:
+def set_receiving_provider(provider: EmailReceivingProvider | None) -> None:
     global _global_receiving_provider
     _global_receiving_provider = provider
 

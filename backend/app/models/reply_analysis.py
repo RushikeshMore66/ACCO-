@@ -1,16 +1,15 @@
 import enum
 import uuid
 from datetime import UTC, datetime
-from typing import Optional
 
 from sqlalchemy import (
+    JSON,
     CheckConstraint,
     DateTime,
     Enum,
     Float,
     ForeignKey,
     Index,
-    JSON,
     String,
     Text,
 )
@@ -59,7 +58,7 @@ class CustomerReplyAnalysis(Base):
         nullable=False,
         index=True,
     )
-    invoice_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    invoice_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("invoices.id", ondelete="SET NULL"),
         nullable=True,
@@ -92,13 +91,13 @@ class CustomerReplyAnalysis(Base):
         nullable=False,
         index=True,
     )
-    reviewed_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    reviewed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+    reviewed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    review_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False

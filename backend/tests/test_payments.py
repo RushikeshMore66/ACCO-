@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, UTC, date
+from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -24,7 +24,7 @@ def test_record_payment(client: TestClient, db_session: Session, normal_user_tok
         "customer_id": cust_id,
         "amount": "100.50",
         "currency": "USD",
-        "payment_date": date.today().isoformat(),
+        "payment_date": datetime.now(UTC).date().isoformat(),
         "payment_method": "BANK_TRANSFER",
         "reference": "REF123"
     }
@@ -44,7 +44,7 @@ def test_invalid_payment_amount(client: TestClient, db_session: Session, normal_
         "customer_id": str(uuid.uuid4()),
         "amount": "-10.00",
         "currency": "USD",
-        "payment_date": date.today().isoformat(),
+        "payment_date": datetime.now(UTC).date().isoformat(),
         "payment_method": "CASH"
     }
     r = client.post(
@@ -81,7 +81,7 @@ def test_allocate_payment(client: TestClient, db_session: Session, normal_user_t
         "customer_id": cust_id,
         "amount": "150.00",
         "currency": "USD",
-        "payment_date": date.today().isoformat(),
+        "payment_date": datetime.now(UTC).date().isoformat(),
         "payment_method": "BANK_TRANSFER"
     }
     r = client.post("/api/v1/payments", headers=normal_user_token_headers, json=pay_data)
@@ -126,7 +126,7 @@ def test_reverse_payment(client: TestClient, db_session: Session, normal_user_to
     # 3. Payment & Allocate
     r = client.post("/api/v1/payments", headers=normal_user_token_headers, json={
         "customer_id": cust_id, "amount": "100.00", "currency": "USD", 
-        "payment_date": date.today().isoformat(), "payment_method": "CASH"
+        "payment_date": datetime.now(UTC).date().isoformat(), "payment_method": "CASH"
     })
     pay_id = r.json()["id"]
     client.post(f"/api/v1/payments/{pay_id}/allocations", headers=normal_user_token_headers, json={

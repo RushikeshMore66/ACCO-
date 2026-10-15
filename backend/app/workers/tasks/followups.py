@@ -2,20 +2,24 @@
 Worker tasks for evaluating broken promises to pay and scheduling follow-ups.
 Deterministic state-transition engine for payment promises.
 """
-from datetime import datetime, UTC
-import uuid
+from datetime import UTC, datetime
 from decimal import Decimal
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
 from app.models.collection_workflow import (
-    PaymentPromise, PromiseStatus, CollectionActivity, EventType
+    CollectionActivity,
+    EventType,
+    PaymentPromise,
+    PromiseStatus,
 )
 from app.models.payment import Payment
 from app.models.payment_allocation import PaymentAllocation
 from app.models.payment_reversal import PaymentReversal
 from app.workers.celery_app import celery_app
+
 
 @celery_app.task(name="app.workers.tasks.followups.sweep_expired_promises_task")
 def sweep_expired_promises_task() -> int:

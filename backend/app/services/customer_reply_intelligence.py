@@ -51,13 +51,13 @@ def analyze_customer_reply(
         extraction = LLMExtractionResult.model_validate(extracted)
     except AIProviderError:
         raise
-    except Exception:
+    except Exception:  # noqa: BLE001 - provider internals must never propagate
         # Never propagate provider internals, message content, or credentials.
         raise AIProviderError("The customer reply could not be analyzed safely.") from None
 
     # Deterministic safeguards run after model output. This analysis is advisory only.
     amount = extraction.explicit_payment_amount
-    if amount is not None and (not amount.is_finite() or amount <= Decimal("0")):
+    if amount is not None and (not amount.is_finite() or amount <= Decimal(0)):
         extraction.explicit_payment_amount = None
         extraction.requires_human_review = True
 

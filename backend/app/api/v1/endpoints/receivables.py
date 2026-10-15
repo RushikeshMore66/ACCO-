@@ -1,8 +1,8 @@
 import uuid
-from decimal import Decimal
-from typing import Any, List
-from datetime import datetime, UTC
 from collections import defaultdict
+from datetime import UTC, datetime
+from decimal import Decimal
+from typing import Any
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
@@ -21,7 +21,7 @@ from app.services.receivables import get_invoice_balance
 
 router = APIRouter()
 
-@router.get("/invoices", response_model=List[InvoiceBalanceResponse])
+@router.get("/invoices", response_model=list[InvoiceBalanceResponse])
 def list_receivables_invoices(
     db: Session = Depends(get_db),
     limit: int = 100,
@@ -48,7 +48,7 @@ def list_receivables_invoices(
         
     return results
 
-@router.get("/summary", response_model=List[ReceivablesSummary])
+@router.get("/summary", response_model=list[ReceivablesSummary])
 def get_receivables_summary(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -88,7 +88,7 @@ def get_receivables_summary(
 
     return [ReceivablesSummary(**v) for v in summaries_by_currency.values()]
 
-@router.get("/aging", response_model=List[AgingReportResponse])
+@router.get("/aging", response_model=list[AgingReportResponse])
 def get_aging_report(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

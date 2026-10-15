@@ -1,17 +1,24 @@
-import uuid
-from datetime import UTC, datetime, date
-from decimal import Decimal
-from typing import TYPE_CHECKING
 import enum
+import uuid
+from datetime import UTC, date, datetime
+from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, String, Enum, Text, Numeric, Date, CheckConstraint, ForeignKeyConstraint
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import (
+    CheckConstraint,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Numeric,
+    String,
+    Text,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 
-if TYPE_CHECKING:
-    pass
 
 class MessageDirection(str, enum.Enum):
     INBOUND = "INBOUND"

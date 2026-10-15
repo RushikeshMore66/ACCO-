@@ -1,9 +1,9 @@
 import uuid
 from decimal import Decimal
-from typing import Any, List
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -82,7 +82,7 @@ def record_payment(
     }
     return payment_dict
 
-@router.get("", response_model=List[PaymentResponse])
+@router.get("", response_model=list[PaymentResponse])
 def list_payments(
     db: Session = Depends(get_db),
     limit: int = 100,
@@ -195,7 +195,7 @@ def allocate_payment(
         if invoice.status != InvoiceStatus.ISSUED:
             raise HTTPException(status_code=400, detail="Cannot allocate to a draft or void invoice")
 
-        allocated, unallocated = get_payment_balances(db, payment)
+        _allocated, unallocated = get_payment_balances(db, payment)
         if allocation_in.amount > unallocated:
             raise HTTPException(status_code=400, detail=f"Allocation amount {allocation_in.amount} exceeds unallocated amount {unallocated}")
             
@@ -269,9 +269,13 @@ def reverse_payment(
         db.add(reversal)
         
         # Reassess any fulfilled promises for invoices affected by this payment
-        from datetime import datetime, UTC
+        from datetime import UTC, datetime
+
         from app.models.collection_workflow import (
-            PaymentPromise, PromiseStatus, CollectionActivity, EventType
+            CollectionActivity,
+            EventType,
+            PaymentPromise,
+            PromiseStatus,
         )
         affected_invoice_ids = [alloc.invoice_id for alloc in payment.allocations]
         if affected_invoice_ids:

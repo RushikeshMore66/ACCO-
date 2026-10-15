@@ -1,10 +1,11 @@
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any
 
 from app.models.collection_policy import CollectionPolicy
 from app.schemas.collections import ReceivableItemResponse
 from app.schemas.receivables import InvoiceBalanceResponse
 from app.services.receivables import calculate_days_overdue
+
 
 def get_effective_policy(policy: CollectionPolicy | None) -> dict:
     if policy:

@@ -1,28 +1,33 @@
 import uuid
-from datetime import datetime, UTC, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-import pytest
-from sqlalchemy import select
 
-from app.models.organization import Organization
+import pytest
+
+from app.models.collection_workflow import (
+    CollectionDispute,
+    CollectionMessage,
+    DisputeCategory,
+    DisputeStatus,
+    MessageChannel,
+    MessageDirection,
+    MessageStatus,
+    PaymentPromise,
+    PromiseStatus,
+)
 from app.models.customer import Customer
+from app.models.email_delivery import DeliveryStatus, EmailDelivery
 from app.models.invoice import Invoice, InvoiceStatus
+from app.models.organization import Organization
 from app.models.payment import Payment
 from app.models.payment_allocation import PaymentAllocation
-from app.models.payment_reversal import PaymentReversal
-from app.models.collection_workflow import (
-    CollectionMessage, MessageDirection, MessageChannel, MessageStatus,
-    PaymentPromise, PromiseStatus, CollectionDispute, DisputeStatus, DisputeCategory
-)
-from app.models.email_delivery import EmailDelivery, DeliveryStatus, EmailDeliveryAttempt
-from app.services.email_provider import MockEmailProvider, EmailProviderError
+from app.models.user import User
+from app.services.collection_policy_engine import evaluate_collection_status
+from app.services.email_provider import MockEmailProvider
+from app.services.receivables import get_invoice_balance
 from app.workers.email_delivery_worker import process_batch
 from app.workers.tasks.followups import sweep_expired_promises
-from app.services.collection_policy_engine import evaluate_collection_status
-from app.services.receivables import get_invoice_balance
 
-
-from app.models.user import User
 
 @pytest.fixture
 def test_setup(db_session, normal_user_token_headers):
@@ -154,7 +159,7 @@ def test_scenario_b_dispute_suppression_race(db_session, test_setup):
     db_session.commit()
 
     mock_provider = MockEmailProvider()
-    processed = process_batch(db_session, batch_size=10, provider=mock_provider)
+    process_batch(db_session, batch_size=10, provider=mock_provider)
 
     db_session.refresh(delivery)
     assert delivery.status == DeliveryStatus.BLOCKED
@@ -201,7 +206,7 @@ def test_scenario_c_promise_suppression_race(db_session, test_setup):
     db_session.commit()
 
     mock_provider = MockEmailProvider()
-    processed = process_batch(db_session, batch_size=10, provider=mock_provider)
+    process_batch(db_session, batch_size=10, provider=mock_provider)
 
     db_session.refresh(delivery)
     assert delivery.status == DeliveryStatus.BLOCKED
@@ -255,7 +260,7 @@ def test_scenario_d_paid_invoice_cancellation_race(db_session, test_setup):
     db_session.commit()
 
     mock_provider = MockEmailProvider()
-    processed = process_batch(db_session, batch_size=10, provider=mock_provider)
+    process_batch(db_session, batch_size=10, provider=mock_provider)
 
     db_session.refresh(delivery)
     assert delivery.status == DeliveryStatus.CANCELLED

@@ -72,12 +72,12 @@ def upgrade() -> None:
     
     org_first_user = {}
     for user in users:
-        u_id, org_id, created_at = user
+        u_id, org_id, _created_at = user
         if org_id not in org_first_user:
             org_first_user[org_id] = u_id
             
     for user in users:
-        u_id, org_id, created_at = user
+        u_id, org_id, _created_at = user
         role = 'OWNER' if org_first_user[org_id] == u_id else 'VIEWER'
         # update user
         if bind.engine.name == 'sqlite':

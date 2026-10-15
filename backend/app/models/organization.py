@@ -3,11 +3,11 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from app.models.user import User
+    from app.models.collection_policy import CollectionPolicy
     from app.models.customer import Customer
     from app.models.invoice import Invoice
     from app.models.payment import Payment
-    from app.models.collection_policy import CollectionPolicy
+    from app.models.user import User
 
 
 from sqlalchemy import Boolean, DateTime, String

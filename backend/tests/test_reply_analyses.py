@@ -30,7 +30,7 @@ class FakeProvider:
             secondary_classifications=[],
             evidence_summary="Customer says they will pay Monday.",
             customer_intent="Promised a future payment.",
-            explicit_payment_amount=Decimal("100"),
+            explicit_payment_amount=Decimal(100),
             currency="USD",
             proposed_payment_date="Monday",
             claims_already_paid=False,
@@ -127,7 +127,7 @@ def test_service_sanitizes_nonpositive_amount(db_session, reply_data):
     from app.services.customer_reply_intelligence import analyze_customer_reply
 
     provider = FakeProvider()
-    provider.result.explicit_payment_amount = Decimal("-25")
+    provider.result.explicit_payment_amount = Decimal(-25)
     analysis = analyze_customer_reply(
         db_session, reply_data["message"].id, reply_data["user"].organization_id, provider
     )

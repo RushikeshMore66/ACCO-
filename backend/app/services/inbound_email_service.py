@@ -15,9 +15,10 @@ import logging
 import re
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Callable, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -120,13 +121,13 @@ def verify_svix_signature(
     if secret_value.startswith("whsec_"):
         try:
             key = base64.b64decode(secret_value[6:])
-        except Exception:
+        except ValueError:
             key = secret_value.encode("utf-8")
     else:
         key = secret_value.encode("utf-8")
 
     # Construct signed payload
-    to_sign = f"{svix_id}.{svix_timestamp}.".encode("utf-8") + body_bytes
+    to_sign = f"{svix_id}.{svix_timestamp}.".encode() + body_bytes
     computed_digest = hmac.new(key, to_sign, hashlib.sha256).digest()
     computed_b64 = base64.b64encode(computed_digest).decode("utf-8")
     expected_v1 = f"v1,{computed_b64}"
@@ -428,7 +429,7 @@ def process_inbound_email_event(
     body_bytes: bytes,
     headers: dict[str, str],
     provider_factory: Callable[[], ReplyExtractionProvider] = OpenAIProviderAdapter,
-    receiving_provider: Optional[EmailReceivingProvider] = None,
+    receiving_provider: EmailReceivingProvider | None = None,
     skip_security_validation: bool = False,
 ) -> dict[str, Any]:
     """
@@ -587,7 +588,7 @@ def process_inbound_email_event(
                     "confidence": "NONE",
                 }
         except Exception as unk_err:
-            logger.exception("Unexpected error retrieving email %s: %s", email_id, str(unk_err))
+            logger.exception("Unexpected error retrieving email %s", email_id)
             raise InboundWebhookError(
                 "Unexpected error retrieving email content",
                 status_code=503,
@@ -765,12 +766,11 @@ def process_inbound_email_event(
             str(ai_err),
         )
         analysis_status = "FAILED"
-    except Exception as unk_err:
+    except Exception:
         db.rollback()
         logger.exception(
-            "Unexpected error analyzing inbound message %s: %s (inbound message preserved)",
+            "Unexpected error analyzing inbound message %s (inbound message preserved)",
             inbound_message.id,
-            str(unk_err),
         )
         analysis_status = "FAILED"
 

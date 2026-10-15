@@ -4,13 +4,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy import text as import_text
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
-from app.db.base import Base
 import app.models
+from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-
-from sqlalchemy.pool import StaticPool
 
 TEST_DATABASE_URL = "sqlite:///:memory:"
 

@@ -1,7 +1,6 @@
+import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
-import uuid
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -15,7 +14,7 @@ class InvoiceCreate(BaseModel):
     due_date: datetime
     currency: str = Field(..., min_length=3, max_length=3, pattern=r"^[A-Z]{3}$")
     total_amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
-    description: Optional[str] = None
+    description: str | None = None
 
     @model_validator(mode="after")
     def check_due_date(self) -> "InvoiceCreate":
@@ -25,13 +24,13 @@ class InvoiceCreate(BaseModel):
 
 
 class InvoiceUpdate(BaseModel):
-    customer_id: Optional[uuid.UUID] = None
-    invoice_number: Optional[str] = Field(None, min_length=1, max_length=255)
-    issue_date: Optional[datetime] = None
-    due_date: Optional[datetime] = None
-    currency: Optional[str] = Field(None, min_length=3, max_length=3, pattern=r"^[A-Z]{3}$")
-    total_amount: Optional[Decimal] = Field(None, gt=0, max_digits=12, decimal_places=2)
-    description: Optional[str] = None
+    customer_id: uuid.UUID | None = None
+    invoice_number: str | None = Field(None, min_length=1, max_length=255)
+    issue_date: datetime | None = None
+    due_date: datetime | None = None
+    currency: str | None = Field(None, min_length=3, max_length=3, pattern=r"^[A-Z]{3}$")
+    total_amount: Decimal | None = Field(None, gt=0, max_digits=12, decimal_places=2)
+    description: str | None = None
 
 
 class InvoiceVoid(BaseModel):
@@ -47,26 +46,26 @@ class InvoiceResponse(BaseModel):
     due_date: datetime
     currency: str
     total_amount: Decimal
-    description: Optional[str]
+    description: str | None
     status: InvoiceStatus
-    void_reason: Optional[str]
+    void_reason: str | None
     created_at: datetime
     updated_at: datetime
-    voided_at: Optional[datetime]
+    voided_at: datetime | None
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class InvoiceImportItem(BaseModel):
-    customer_id: Optional[uuid.UUID] = None
-    customer_name: Optional[str] = None
-    customer_email: Optional[str] = None
+    customer_id: uuid.UUID | None = None
+    customer_name: str | None = None
+    customer_email: str | None = None
     invoice_number: str
     issue_date: datetime
     due_date: datetime
     currency: str = Field(..., min_length=3, max_length=3, pattern=r"^[A-Z]{3}$")
     total_amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
-    description: Optional[str] = None
+    description: str | None = None
     auto_issue: bool = False
 
 class InvoiceImportBatchRequest(BaseModel):
@@ -75,8 +74,8 @@ class InvoiceImportBatchRequest(BaseModel):
 class InvoiceImportBatchResultItem(BaseModel):
     invoice_number: str
     status: str  # "CREATED", "ISSUED", "REJECTED", "DUPLICATE"
-    invoice_id: Optional[uuid.UUID] = None
-    error: Optional[str] = None
+    invoice_id: uuid.UUID | None = None
+    error: str | None = None
 
 class InvoiceImportBatchResponse(BaseModel):
     total_processed: int

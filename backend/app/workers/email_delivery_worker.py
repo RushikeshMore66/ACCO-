@@ -1,24 +1,26 @@
 import logging
-from datetime import datetime, UTC, timedelta
-from typing import Optional
-import uuid
-from sqlalchemy import select, or_
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
-from app.models.email_delivery import EmailDelivery, DeliveryStatus, EmailDeliveryAttempt
-from app.models.invoice import Invoice
 from app.models.collection_policy import CollectionPolicy
 from app.models.collection_workflow import (
-    CollectionDispute, PaymentPromise, CollectionActivity, EventType
+    CollectionActivity,
+    CollectionDispute,
+    EventType,
+    PaymentPromise,
 )
-from app.services.receivables import get_invoice_balance
+from app.models.email_delivery import DeliveryStatus, EmailDelivery, EmailDeliveryAttempt
+from app.models.invoice import Invoice
 from app.services.collection_pause_service import evaluate_pause_conditions
 from app.services.email_provider import EmailProvider, EmailProviderError, get_email_provider
+from app.services.receivables import get_invoice_balance
 
 logger = logging.getLogger(__name__)
 
-def process_batch(db: Session, batch_size: int = 10, provider: Optional[EmailProvider] = None) -> int:
+def process_batch(db: Session, batch_size: int = 10, provider: EmailProvider | None = None) -> int:
     """
     Process a bounded batch of QUEUED emails with fresh pre-send eligibility and suppression checks.
     Guarantees bounded retries, idempotent dispatch, and tenant isolation.
@@ -202,7 +204,7 @@ def process_batch(db: Session, batch_size: int = 10, provider: Optional[EmailPro
                 db.commit()
                 processed_count += 1
 
-            except Exception as unk_err:
+            except Exception as unk_err:  # noqa: BLE001 - record failure on the delivery, keep batch going
                 comp_now = datetime.now(UTC)
                 delivery.attempt_count = attempt_num
                 delivery.last_error_code = "UNEXPECTED_ERROR"
@@ -223,8 +225,8 @@ def process_batch(db: Session, batch_size: int = 10, provider: Optional[EmailPro
                 db.commit()
                 processed_count += 1
 
-        except Exception as item_err:
-            logger.exception(f"Unhandled error processing delivery {delivery.id}: {item_err}")
+        except Exception:
+            logger.exception("Unhandled error processing delivery %s", delivery.id)
             db.rollback()
 
     return processed_count

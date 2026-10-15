@@ -126,7 +126,7 @@ def analyze_message(
         if exc.code == "not_found":
             raise HTTPException(status_code=404, detail="Message not found") from None
         raise HTTPException(status_code=409, detail=str(exc)) from None
-    except Exception:
+    except Exception:  # noqa: BLE001 - roll back and hide internals behind an opaque 500
         db.rollback()
         # Avoid exposing provider/database internals or customer message content.
         raise HTTPException(
@@ -237,7 +237,7 @@ def review_analysis(
 
     try:
         db.commit()
-    except Exception:
+    except Exception:  # noqa: BLE001 - roll back and hide internals behind an opaque 500
         db.rollback()
         raise HTTPException(status_code=500, detail="Could not save the review decision.") from None
 
