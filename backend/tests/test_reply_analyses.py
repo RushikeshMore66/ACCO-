@@ -1,4 +1,5 @@
 """Focused regression tests for advisory customer reply analysis."""
+
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -152,7 +153,9 @@ def test_analysis_endpoints_and_one_time_review(
     from app.api.v1.endpoints import reply_analyses
 
     fake = FakeProvider()
-    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (lambda: fake)
+    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (
+        lambda: fake
+    )
     try:
         response = client.post(
             f"/api/v1/collections/messages/{reply_data['message'].id}/analyze",
@@ -196,14 +199,19 @@ def test_analysis_endpoints_and_one_time_review(
         client.app.dependency_overrides.pop(reply_analyses.get_reply_provider_factory, None)
 
 
-def test_unconfigured_provider_is_service_unavailable(client, normal_user_token_headers, reply_data):
+def test_unconfigured_provider_is_service_unavailable(
+    client, normal_user_token_headers, reply_data
+):
     from app.api.v1.endpoints import reply_analyses
 
     def raise_not_configured():
         from app.adapters.ai.openai_provider import AIProviderNotConfigured
+
         raise AIProviderNotConfigured("safe")
 
-    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: raise_not_configured
+    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (
+        raise_not_configured
+    )
     try:
         response = client.post(
             f"/api/v1/collections/messages/{reply_data['message'].id}/analyze",

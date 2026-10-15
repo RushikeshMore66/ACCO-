@@ -16,13 +16,16 @@ class MessageCreate(BaseModel):
     subject: str | None = None
     body: str
 
+
 class MessageUpdate(BaseModel):
     channel: MessageChannel | None = None
     subject: str | None = None
     body: str | None = None
 
+
 class MessageReject(BaseModel):
     rejection_reason: str
+
 
 class MessageResponse(BaseModel):
     id: uuid.UUID
@@ -41,6 +44,7 @@ class MessageResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
 
 class TimelineEvent(BaseModel):
     event_type: EventType

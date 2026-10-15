@@ -10,7 +10,7 @@ celery_app = Celery(
     include=[
         "app.workers.tasks.followups",
         "app.workers.tasks.reminders",
-    ]
+    ],
 )
 
 celery_app.conf.update(
@@ -32,7 +32,7 @@ celery_app.conf.update(
             "task": "app.workers.tasks.reminders.evaluate_receivables_reminders_task",
             "schedule": 14400.0,  # every 4 hours
         },
-    }
+    },
 )
 
 
@@ -44,6 +44,7 @@ def on_worker_process_init(**kwargs) -> None:
     without closing connections owned by the parent process.
     """
     from app.db.session import dispose_engine
+
     dispose_engine(close=False)
 
 
@@ -51,4 +52,5 @@ def on_worker_process_init(**kwargs) -> None:
 def on_worker_process_shutdown(**kwargs) -> None:
     """Cleanly close all database connections when worker child process terminates."""
     from app.db.session import dispose_engine
+
     dispose_engine(close=True)

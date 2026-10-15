@@ -12,6 +12,7 @@ from app.schemas.customer import CustomerCreate, CustomerResponse, CustomerUpdat
 
 router = APIRouter()
 
+
 @router.post("", response_model=CustomerResponse, status_code=status.HTTP_201_CREATED)
 def create_customer(
     *,
@@ -27,7 +28,7 @@ def create_customer(
         phone=customer_in.phone,
         billing_address=customer_in.billing_address,
         tax_identifier=customer_in.tax_identifier,
-        is_active=True
+        is_active=True,
     )
     db.add(customer)
     db.commit()
@@ -46,15 +47,15 @@ def list_customers(
     current_user: User = Depends(get_current_user),
 ) -> Any:
     stmt = select(Customer).filter(Customer.organization_id == current_user.organization_id)
-    
+
     if not include_inactive:
         stmt = stmt.filter(Customer.is_active)
-        
+
     if name:
         stmt = stmt.filter(Customer.name.ilike(f"%{name}%"))
     if email:
         stmt = stmt.filter(Customer.email.ilike(f"%{email}%"))
-        
+
     stmt = stmt.order_by(Customer.created_at.desc()).offset(offset).limit(limit)
     customers = db.execute(stmt).scalars().all()
     return customers
@@ -68,8 +69,7 @@ def get_customer(
     current_user: User = Depends(get_current_user),
 ) -> Any:
     stmt = select(Customer).filter(
-        Customer.id == customer_id, 
-        Customer.organization_id == current_user.organization_id
+        Customer.id == customer_id, Customer.organization_id == current_user.organization_id
     )
     customer = db.execute(stmt).scalar_one_or_none()
     if not customer:
@@ -86,8 +86,7 @@ def update_customer(
     current_user: User = Depends(get_current_user),
 ) -> Any:
     stmt = select(Customer).filter(
-        Customer.id == customer_id, 
-        Customer.organization_id == current_user.organization_id
+        Customer.id == customer_id, Customer.organization_id == current_user.organization_id
     )
     customer = db.execute(stmt).scalar_one_or_none()
     if not customer:
@@ -96,7 +95,7 @@ def update_customer(
     update_data = customer_in.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(customer, field, value)
-        
+
     db.add(customer)
     db.commit()
     db.refresh(customer)

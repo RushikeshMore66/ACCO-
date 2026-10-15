@@ -68,14 +68,17 @@ class InvoiceImportItem(BaseModel):
     description: str | None = None
     auto_issue: bool = False
 
+
 class InvoiceImportBatchRequest(BaseModel):
     invoices: list[InvoiceImportItem]
+
 
 class InvoiceImportBatchResultItem(BaseModel):
     invoice_number: str
     status: str  # "CREATED", "ISSUED", "REJECTED", "DUPLICATE"
     invoice_id: uuid.UUID | None = None
     error: str | None = None
+
 
 class InvoiceImportBatchResponse(BaseModel):
     total_processed: int

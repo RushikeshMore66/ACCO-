@@ -2,6 +2,7 @@
 Email provider abstraction and adapters.
 Provides idempotent dispatch with provider message tracking and error categorization.
 """
+
 import uuid
 from typing import Protocol, runtime_checkable
 
@@ -11,7 +12,9 @@ from app.core.config import settings
 
 
 class EmailProviderError(Exception):
-    def __init__(self, message: str, error_code: str = "PROVIDER_ERROR", is_transient: bool = False):
+    def __init__(
+        self, message: str, error_code: str = "PROVIDER_ERROR", is_transient: bool = False
+    ):
         super().__init__(message)
         self.message = message
         self.error_code = error_code
@@ -26,7 +29,7 @@ class EmailProvider(Protocol):
         subject: str,
         body: str,
         idempotency_key: str,
-        from_email: str | None = None
+        from_email: str | None = None,
     ) -> dict:
         """
         Dispatches email. Returns dictionary with at least 'provider_message_id'.
@@ -38,7 +41,9 @@ class EmailProvider(Protocol):
 class ResendEmailProvider:
     def __init__(self, api_key: str | None = None, default_from: str | None = None):
         self.api_key = api_key or settings.resend_api_key
-        self.default_from = default_from or getattr(settings, "default_from_email", "billing@acco.app")
+        self.default_from = default_from or getattr(
+            settings, "default_from_email", "billing@acco.app"
+        )
 
     def send_email(
         self,
@@ -46,13 +51,11 @@ class ResendEmailProvider:
         subject: str,
         body: str,
         idempotency_key: str,
-        from_email: str | None = None
+        from_email: str | None = None,
     ) -> dict:
         if not self.api_key:
             raise EmailProviderError(
-                "Resend API key is not configured",
-                error_code="MISSING_API_KEY",
-                is_transient=False
+                "Resend API key is not configured", error_code="MISSING_API_KEY", is_transient=False
             )
 
         headers = {
@@ -70,29 +73,27 @@ class ResendEmailProvider:
         try:
             with httpx.Client(timeout=10.0) as client:
                 response = client.post(
-                    "https://api.resend.com/emails",
-                    json=payload,
-                    headers=headers
+                    "https://api.resend.com/emails", json=payload, headers=headers
                 )
         except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
             raise EmailProviderError(
                 f"Network error contacting Resend: {exc!s}",
                 error_code="NETWORK_TIMEOUT",
-                is_transient=True
+                is_transient=True,
             ) from exc
 
         if response.status_code >= 500 or response.status_code == 429:
             raise EmailProviderError(
                 f"Resend service error ({response.status_code}): {response.text}",
                 error_code=f"HTTP_{response.status_code}",
-                is_transient=True
+                is_transient=True,
             )
 
         if response.status_code >= 400:
             raise EmailProviderError(
                 f"Resend client error ({response.status_code}): {response.text}",
                 error_code=f"HTTP_{response.status_code}",
-                is_transient=False
+                is_transient=False,
             )
 
         data = response.json()
@@ -113,12 +114,16 @@ class MockEmailProvider:
         subject: str,
         body: str,
         idempotency_key: str,
-        from_email: str | None = None
+        from_email: str | None = None,
     ) -> dict:
         if self.simulate_transient_error:
-            raise EmailProviderError(self.error_message, error_code="SIMULATED_TRANSIENT", is_transient=True)
+            raise EmailProviderError(
+                self.error_message, error_code="SIMULATED_TRANSIENT", is_transient=True
+            )
         if self.simulate_permanent_error:
-            raise EmailProviderError(self.error_message, error_code="SIMULATED_PERMANENT", is_transient=False)
+            raise EmailProviderError(
+                self.error_message, error_code="SIMULATED_PERMANENT", is_transient=False
+            )
 
         provider_message_id = f"mock_msg_{uuid.uuid4().hex[:12]}"
         record = {
@@ -135,12 +140,14 @@ class MockEmailProvider:
 
 _global_provider: EmailProvider | None = None
 
+
 def get_email_provider() -> EmailProvider:
     if _global_provider is not None:
         return _global_provider
     if settings.resend_api_key:
         return ResendEmailProvider()
     return MockEmailProvider()
+
 
 def set_email_provider(provider: EmailProvider | None) -> None:
     global _global_provider
@@ -276,6 +283,7 @@ class MockReceivingProvider:
 
 _global_receiving_provider: EmailReceivingProvider | None = None
 
+
 def get_receiving_provider() -> EmailReceivingProvider:
     if _global_receiving_provider is not None:
         return _global_receiving_provider
@@ -283,7 +291,7 @@ def get_receiving_provider() -> EmailReceivingProvider:
         return ResendReceivingProvider()
     return MockReceivingProvider()
 
+
 def set_receiving_provider(provider: EmailReceivingProvider | None) -> None:
     global _global_receiving_provider
     _global_receiving_provider = provider
-

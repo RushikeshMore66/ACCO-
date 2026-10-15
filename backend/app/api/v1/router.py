@@ -41,8 +41,12 @@ api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboar
 
 # Collections
 api_router.include_router(collections.router, prefix="/collections", tags=["collections"])
-api_router.include_router(collections_messages.router, prefix="/collections", tags=["collections_messages"])
-api_router.include_router(promises_disputes.router, prefix="/collections", tags=["promises_disputes"])
+api_router.include_router(
+    collections_messages.router, prefix="/collections", tags=["collections_messages"]
+)
+api_router.include_router(
+    promises_disputes.router, prefix="/collections", tags=["promises_disputes"]
+)
 api_router.include_router(email_deliveries.router, prefix="/collections", tags=["email_deliveries"])
 api_router.include_router(reply_analyses.router, prefix="/collections", tags=["reply_analyses"])
 

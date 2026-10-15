@@ -3,6 +3,7 @@ Comprehensive tests for automated inbound email reply ingestion and AI analysis.
 Verifies signature validation, replay window enforcement, deduplication, safe entity matching,
 advisory AI analysis invocation, failure recovery, tenant isolation, and financial safeguards.
 """
+
 import base64
 import hashlib
 import hmac
@@ -173,7 +174,9 @@ def inbound_setup(db_session, normal_user_token_headers):
 def test_1_valid_signed_inbound_message_accepted(client: TestClient, db_session, inbound_setup):
     """Scenario 1: Valid signed inbound reply via In-Reply-To is accepted, matched, and analyzed."""
     fake_provider = MockAnalysisProvider()
-    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (lambda: fake_provider)
+    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (
+        lambda: fake_provider
+    )
 
     # Set secret in settings
     orig_secret = settings.email_webhook_signing_secret
@@ -228,7 +231,9 @@ def test_1_valid_signed_inbound_message_accepted(client: TestClient, db_session,
         assert analysis.source_message_id == msg_id
 
         activities = db_session.scalars(
-            select(CollectionActivity).where(CollectionActivity.customer_id == inbound_setup["customer"].id)
+            select(CollectionActivity).where(
+                CollectionActivity.customer_id == inbound_setup["customer"].id
+            )
         ).all()
         event_types = [a.event_type for a in activities]
         assert EventType.INBOUND_RECORDED in event_types
@@ -296,10 +301,14 @@ def test_4_replay_window_expired_is_rejected(client: TestClient):
         settings.email_webhook_signing_secret = orig_secret
 
 
-def test_5_duplicate_event_is_idempotent_no_duplicate_message(client: TestClient, db_session, inbound_setup):
+def test_5_duplicate_event_is_idempotent_no_duplicate_message(
+    client: TestClient, db_session, inbound_setup
+):
     """Scenario 5: Duplicate webhook delivery is deduplicated without creating duplicate messages or analyses."""
     fake_provider = MockAnalysisProvider()
-    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (lambda: fake_provider)
+    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (
+        lambda: fake_provider
+    )
 
     payload = {
         "type": "email.received",
@@ -336,7 +345,9 @@ def test_5_duplicate_event_is_idempotent_no_duplicate_message(client: TestClient
     assert fake_provider.calls == 1  # AI was NOT invoked again
 
 
-def test_6_multiple_outstanding_invoices_not_arbitrarily_matched(client: TestClient, db_session, inbound_setup):
+def test_6_multiple_outstanding_invoices_not_arbitrarily_matched(
+    client: TestClient, db_session, inbound_setup
+):
     """Scenario 6: When customer has several outstanding invoices and no thread reference, association is NOT guessed."""
     user = inbound_setup["user"]
     customer = inbound_setup["customer"]
@@ -413,13 +424,17 @@ def test_7_unknown_sender_handled_safely_no_financial_record(client: TestClient,
 
     # Operational audit record was preserved
     event = db_session.scalar(
-        select(EmailWebhookEvent).where(EmailWebhookEvent.provider_event_id == "evt_unknown_sender_1")
+        select(EmailWebhookEvent).where(
+            EmailWebhookEvent.provider_event_id == "evt_unknown_sender_1"
+        )
     )
     assert event is not None
     assert "REJECTED" in event.processing_result
 
 
-def test_8_multiple_matching_customers_across_tenants_not_guessed(client: TestClient, db_session, inbound_setup):
+def test_8_multiple_matching_customers_across_tenants_not_guessed(
+    client: TestClient, db_session, inbound_setup
+):
     """Scenario 8: If sender email exists under multiple tenants/customers, do not guess."""
     # Create second organization with customer sharing the same email
     other_org = Organization(name="Other Corp", slug="other-corp-inbound")
@@ -458,7 +473,9 @@ def test_8_multiple_matching_customers_across_tenants_not_guessed(client: TestCl
     assert db_session.query(CollectionMessage).count() == initial_msg_count
 
 
-def test_9_explicit_invoice_reference_in_subject_or_body(client: TestClient, db_session, inbound_setup):
+def test_9_explicit_invoice_reference_in_subject_or_body(
+    client: TestClient, db_session, inbound_setup
+):
     """Scenario 9: Multiple open invoices, but subject explicitly references INV-2026-002."""
     user = inbound_setup["user"]
     customer = inbound_setup["customer"]
@@ -497,10 +514,14 @@ def test_9_explicit_invoice_reference_in_subject_or_body(client: TestClient, db_
     assert data["match_confidence"] == "HIGH_EXPLICIT_INVOICE_MENTION"
 
 
-def test_10_ai_analysis_failure_preserves_inbound_message(client: TestClient, db_session, inbound_setup):
+def test_10_ai_analysis_failure_preserves_inbound_message(
+    client: TestClient, db_session, inbound_setup
+):
     """Scenario 10: If AI provider fails or times out, the inbound message is NOT lost."""
     failing_provider = MockAnalysisProvider(error=AIProviderError("OpenAI API rate limit exceeded"))
-    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (lambda: failing_provider)
+    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (
+        lambda: failing_provider
+    )
 
     try:
         payload = {
@@ -533,7 +554,9 @@ def test_10_ai_analysis_failure_preserves_inbound_message(client: TestClient, db
         client.app.dependency_overrides.pop(reply_analyses.get_reply_provider_factory, None)
 
 
-def test_11_customer_payment_claim_does_not_mark_invoice_paid(client: TestClient, db_session, inbound_setup):
+def test_11_customer_payment_claim_does_not_mark_invoice_paid(
+    client: TestClient, db_session, inbound_setup
+):
     """Scenario 11: A customer claiming 'I have already paid' must NOT mark the invoice paid or mutate balance."""
     invoice = inbound_setup["invoice"]
     original_status = invoice.status
@@ -556,7 +579,9 @@ def test_11_customer_payment_claim_does_not_mark_invoice_paid(client: TestClient
         confidence_score=0.98,
     )
     provider = MockAnalysisProvider(result=payment_claim_result)
-    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (lambda: provider)
+    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (
+        lambda: provider
+    )
 
     try:
         payload = {
@@ -591,13 +616,17 @@ def test_11_customer_payment_claim_does_not_mark_invoice_paid(client: TestClient
         client.app.dependency_overrides.pop(reply_analyses.get_reply_provider_factory, None)
 
 
-def test_12_potential_promise_respects_human_review_boundary(client: TestClient, db_session, inbound_setup):
+def test_12_potential_promise_respects_human_review_boundary(
+    client: TestClient, db_session, inbound_setup
+):
     """Scenario 12: An extracted promise is strictly PENDING_REVIEW; no PaymentPromise is created silently."""
     from app.models.collection_workflow import PaymentPromise
 
     initial_promise_count = db_session.query(PaymentPromise).count()
     fake_provider = MockAnalysisProvider()
-    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (lambda: fake_provider)
+    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (
+        lambda: fake_provider
+    )
 
     try:
         payload = {
@@ -642,7 +671,9 @@ def test_14_existing_resend_endpoint_transparently_routes_inbound_and_delivery_e
 ):
     """Scenario 14: /api/v1/webhooks/email/resend routes email.received to inbound pipeline and email.delivered to delivery pipeline."""
     fake_provider = MockAnalysisProvider()
-    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (lambda: fake_provider)
+    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (
+        lambda: fake_provider
+    )
 
     try:
         # 1. Inbound reply sent to /email/resend
@@ -673,7 +704,9 @@ def test_14_existing_resend_endpoint_transparently_routes_inbound_and_delivery_e
         deliv_bytes = json.dumps(deliv_payload).encode("utf-8")
         deliv_headers = {"svix-id": "evt_resend_deliv_1", "content-type": "application/json"}
 
-        resp2 = client.post("/api/v1/webhooks/email/resend", content=deliv_bytes, headers=deliv_headers)
+        resp2 = client.post(
+            "/api/v1/webhooks/email/resend", content=deliv_bytes, headers=deliv_headers
+        )
         assert resp2.status_code == 200
         assert resp2.json()["status"] == "processed"
     finally:
@@ -684,21 +717,25 @@ def test_15_metadata_only_payload_retrieves_body_via_receiving_provider(
     client: TestClient, db_session, inbound_setup
 ):
     """Scenario 15: Resend metadata-only webhook fetches actual body via receiving provider and analyzes it."""
-    mock_receiving = MockReceivingProvider({
-        "recv_meta_123": {
-            "id": "recv_meta_123",
-            "from": "billing@acmecorp.com",
-            "to": ["collections@mycompany.com"],
-            "subject": "Re: Outstanding Invoice",
-            "text": "Here is the payment confirmation. We will pay the remaining $500 next Tuesday.",
-            "html": "<p>Here is the payment confirmation. We will pay the remaining $500 next Tuesday.</p>",
-            "headers": {"in-reply-to": inbound_setup["provider_msg_id"]},
+    mock_receiving = MockReceivingProvider(
+        {
+            "recv_meta_123": {
+                "id": "recv_meta_123",
+                "from": "billing@acmecorp.com",
+                "to": ["collections@mycompany.com"],
+                "subject": "Re: Outstanding Invoice",
+                "text": "Here is the payment confirmation. We will pay the remaining $500 next Tuesday.",
+                "html": "<p>Here is the payment confirmation. We will pay the remaining $500 next Tuesday.</p>",
+                "headers": {"in-reply-to": inbound_setup["provider_msg_id"]},
+            }
         }
-    })
+    )
     set_receiving_provider(mock_receiving)
 
     fake_ai = MockAnalysisProvider()
-    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (lambda: fake_ai)
+    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (
+        lambda: fake_ai
+    )
 
     try:
         # Webhook payload has NO text or html, only metadata and email_id
@@ -739,15 +776,17 @@ def test_16_transient_retrieval_failure_raises_503_and_allows_retry(
     client: TestClient, db_session, inbound_setup
 ):
     """Scenario 16: Transient API error returns 503 and does NOT record deduplication event, allowing retries."""
-    mock_receiving = MockReceivingProvider({
-        "recv_transient_1": {
-            "id": "recv_transient_1",
-            "from": "billing@acmecorp.com",
-            "to": ["collections@mycompany.com"],
-            "subject": "Re: Transient test",
-            "text": "I will settle the invoice tomorrow.",
+    mock_receiving = MockReceivingProvider(
+        {
+            "recv_transient_1": {
+                "id": "recv_transient_1",
+                "from": "billing@acmecorp.com",
+                "to": ["collections@mycompany.com"],
+                "subject": "Re: Transient test",
+                "text": "I will settle the invoice tomorrow.",
+            }
         }
-    })
+    )
     mock_receiving.simulate_transient_error = True
     set_receiving_provider(mock_receiving)
 
@@ -771,7 +810,9 @@ def test_16_transient_retrieval_failure_raises_503_and_allows_retry(
         # Ensure no EmailWebhookEvent was committed for this event_id
         db_session.expire_all()
         existing_event = db_session.scalar(
-            select(EmailWebhookEvent).where(EmailWebhookEvent.provider_event_id == "evt_transient_retry_1")
+            select(EmailWebhookEvent).where(
+                EmailWebhookEvent.provider_event_id == "evt_transient_retry_1"
+            )
         )
         assert existing_event is None
 
@@ -786,7 +827,9 @@ def test_16_transient_retrieval_failure_raises_503_and_allows_retry(
         # Now it is recorded
         db_session.expire_all()
         saved_event = db_session.scalar(
-            select(EmailWebhookEvent).where(EmailWebhookEvent.provider_event_id == "evt_transient_retry_1")
+            select(EmailWebhookEvent).where(
+                EmailWebhookEvent.provider_event_id == "evt_transient_retry_1"
+            )
         )
         assert saved_event is not None
     finally:
@@ -802,7 +845,9 @@ def test_17_permanent_retrieval_failure_records_rejection_without_false_message(
     set_receiving_provider(mock_receiving)
 
     fake_ai = MockAnalysisProvider()
-    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (lambda: fake_ai)
+    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (
+        lambda: fake_ai
+    )
 
     try:
         payload = {
@@ -842,20 +887,24 @@ def test_18_empty_retrieved_body_is_rejected_without_fake_substitution(
     client: TestClient, db_session, inbound_setup
 ):
     """Scenario 18: Empty body is ignored with REJECTED_EMPTY_BODY audit and never substituted with subject."""
-    mock_receiving = MockReceivingProvider({
-        "recv_empty_1": {
-            "id": "recv_empty_1",
-            "from": "billing@acmecorp.com",
-            "to": ["collections@mycompany.com"],
-            "subject": "Empty body subject",
-            "text": "   ",
-            "html": "",
+    mock_receiving = MockReceivingProvider(
+        {
+            "recv_empty_1": {
+                "id": "recv_empty_1",
+                "from": "billing@acmecorp.com",
+                "to": ["collections@mycompany.com"],
+                "subject": "Empty body subject",
+                "text": "   ",
+                "html": "",
+            }
         }
-    })
+    )
     set_receiving_provider(mock_receiving)
 
     fake_ai = MockAnalysisProvider()
-    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (lambda: fake_ai)
+    client.app.dependency_overrides[reply_analyses.get_reply_provider_factory] = lambda: (
+        lambda: fake_ai
+    )
 
     try:
         payload = {
@@ -879,7 +928,9 @@ def test_18_empty_retrieved_body_is_rejected_without_fake_substitution(
         # Verify audit event in DB records REJECTED_EMPTY_BODY
         db_session.expire_all()
         audit = db_session.scalar(
-            select(EmailWebhookEvent).where(EmailWebhookEvent.provider_event_id == "evt_empty_body_1")
+            select(EmailWebhookEvent).where(
+                EmailWebhookEvent.provider_event_id == "evt_empty_body_1"
+            )
         )
         assert audit is not None
         assert audit.processing_result == "REJECTED_EMPTY_BODY"
@@ -935,5 +986,3 @@ def test_20_invalid_signature_on_resend_endpoint_is_rejected_before_db_mutation(
         assert "Invalid webhook signature" in resp.json()["detail"]
     finally:
         settings.email_webhook_signing_secret = orig_secret
-
-

@@ -21,6 +21,7 @@ class InvoiceBalanceResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 class ReceivablesSummary(BaseModel):
     currency: str
     invoices_count: int
@@ -30,10 +31,12 @@ class ReceivablesSummary(BaseModel):
     overdue_invoices_count: int
     total_overdue_amount: Decimal
 
+
 class AgingBucketTotal(BaseModel):
     bucket: str
     outstanding_invoices_count: int
     outstanding_amount: Decimal
+
 
 class AgingReportResponse(BaseModel):
     currency: str

@@ -3,6 +3,7 @@ Inbound Email Processing Service for ACCO.
 Handles signature verification, payload validation, sender normalization,
 safe thread/customer/invoice matching, message persistence, and advisory AI analysis.
 """
+
 from __future__ import annotations
 
 import base64
@@ -114,7 +115,9 @@ def verify_svix_signature(
 
     now = int(time.time())
     if abs(now - ts) > tolerance_seconds:
-        logger.warning("Webhook timestamp %s outside tolerance window (%s seconds)", ts, tolerance_seconds)
+        logger.warning(
+            "Webhook timestamp %s outside tolerance window (%s seconds)", ts, tolerance_seconds
+        )
         return False
 
     # Decode key: Svix secret starts with 'whsec_' followed by base64
@@ -179,7 +182,6 @@ def validate_webhook_security(
             raise WebhookSignatureVerificationError("Invalid webhook signature")
 
 
-
 def normalize_email_address(raw_address: str | None) -> str:
     """Extract clean, lowercase email address from display names or raw strings."""
     if not raw_address:
@@ -196,7 +198,9 @@ def clean_html_to_text(html_content: str) -> str:
     if not html_content:
         return ""
     # Strip script and style tags
-    cleaned = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", html_content, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(
+        r"<(script|style)[^>]*>.*?</\1>", "", html_content, flags=re.DOTALL | re.IGNORECASE
+    )
     # Replace block breaks with newlines
     cleaned = re.sub(r"<(?:br|div|p|/p|/div)[^>]*>", "\n", cleaned, flags=re.IGNORECASE)
     # Strip remaining HTML tags
@@ -279,8 +283,7 @@ def resolve_inbound_reply(
     for ref in reference_candidates:
         deliveries = db.scalars(
             select(EmailDelivery).where(
-                (EmailDelivery.provider_message_id == ref)
-                | (EmailDelivery.idempotency_key == ref)
+                (EmailDelivery.provider_message_id == ref) | (EmailDelivery.idempotency_key == ref)
             )
         ).all()
 
@@ -297,14 +300,11 @@ def resolve_inbound_reply(
         if len(deliveries) == 1:
             delivery = deliveries[0]
             # Verify recipient email matches sender or belongs to customer
-            if (
-                delivery.recipient_email.lower() == sender_email
-                or db.scalar(
-                    select(Customer.id).where(
-                        Customer.id == delivery.customer_id,
-                        Customer.organization_id == delivery.organization_id,
-                        Customer.email.ilike(sender_email),
-                    )
+            if delivery.recipient_email.lower() == sender_email or db.scalar(
+                select(Customer.id).where(
+                    Customer.id == delivery.customer_id,
+                    Customer.organization_id == delivery.organization_id,
+                    Customer.email.ilike(sender_email),
                 )
             ):
                 return MatchResult(
@@ -326,9 +326,7 @@ def resolve_inbound_reply(
             match_reason="Sender email address is missing or invalid",
         )
 
-    matched_customers = db.scalars(
-        select(Customer).where(Customer.email.ilike(sender_email))
-    ).all()
+    matched_customers = db.scalars(select(Customer).where(Customer.email.ilike(sender_email))).all()
 
     if len(matched_customers) == 0:
         return MatchResult(
@@ -473,11 +471,7 @@ def process_inbound_email_event(
         raise InboundWebhookError("Webhook missing required event identifier", status_code=400)
 
     email_id = data.get("email_id") or data.get("id")
-    provider_message_id = (
-        data.get("message_id")
-        or email_id
-        or "unknown"
-    )
+    provider_message_id = data.get("message_id") or email_id or "unknown"
 
     # 4. Deduplicate against EmailWebhookEvent
     existing_event = db.scalar(
@@ -487,11 +481,15 @@ def process_inbound_email_event(
         )
     )
     if existing_event:
-        logger.info("Inbound webhook event %s already processed; skipping idempotently", provider_event_id)
+        logger.info(
+            "Inbound webhook event %s already processed; skipping idempotently", provider_event_id
+        )
         return {
             "status": "already processed",
             "provider_event_id": provider_event_id,
-            "message_id": str(existing_event.inbound_message_id) if existing_event.inbound_message_id else None,
+            "message_id": str(existing_event.inbound_message_id)
+            if existing_event.inbound_message_id
+            else None,
         }
 
     # Only process email.received events in inbound handler
@@ -524,7 +522,9 @@ def process_inbound_email_event(
     if not has_usable_payload_content:
         # Documented Resend inbound event is metadata-only. Retrieve actual content from Receiving API.
         if not email_id:
-            logger.warning("Inbound email event %s missing email_id for content retrieval", provider_event_id)
+            logger.warning(
+                "Inbound email event %s missing email_id for content retrieval", provider_event_id
+            )
             audit_event = EmailWebhookEvent(
                 provider="resend",
                 provider_event_id=provider_event_id,

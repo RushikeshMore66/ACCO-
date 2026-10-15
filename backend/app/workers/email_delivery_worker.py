@@ -20,6 +20,7 @@ from app.services.receivables import get_invoice_balance
 
 logger = logging.getLogger(__name__)
 
+
 def process_batch(db: Session, batch_size: int = 10, provider: EmailProvider | None = None) -> int:
     """
     Process a bounded batch of QUEUED emails with fresh pre-send eligibility and suppression checks.
@@ -35,10 +36,7 @@ def process_batch(db: Session, batch_size: int = 10, provider: EmailProvider | N
         select(EmailDelivery)
         .where(
             EmailDelivery.status == DeliveryStatus.QUEUED,
-            or_(
-                EmailDelivery.next_attempt_at.is_(None),
-                EmailDelivery.next_attempt_at <= now
-            )
+            or_(EmailDelivery.next_attempt_at.is_(None), EmailDelivery.next_attempt_at <= now),
         )
         .order_by(EmailDelivery.created_at.asc())
         .limit(batch_size)
@@ -57,10 +55,9 @@ def process_batch(db: Session, batch_size: int = 10, provider: EmailProvider | N
         try:
             # 2. Fresh Pre-Send Eligibility & Balance Check
             invoice = db.scalar(
-                select(Invoice)
-                .where(
+                select(Invoice).where(
                     Invoice.id == delivery.invoice_id,
-                    Invoice.organization_id == delivery.organization_id
+                    Invoice.organization_id == delivery.organization_id,
                 )
             )
 
@@ -75,15 +72,17 @@ def process_batch(db: Session, batch_size: int = 10, provider: EmailProvider | N
             if balance.outstanding_amount <= 0:
                 delivery.status = DeliveryStatus.CANCELLED
                 delivery.last_error_code = "INVOICE_PAID"
-                delivery.last_error_summary = "Invoice balance is zero before dispatch; reminder suppressed."
-                
+                delivery.last_error_summary = (
+                    "Invoice balance is zero before dispatch; reminder suppressed."
+                )
+
                 activity = CollectionActivity(
                     organization_id=delivery.organization_id,
                     customer_id=delivery.customer_id,
                     invoice_id=delivery.invoice_id,
                     event_type=EventType.COLLECTION_PAUSED,
                     description=f"Email delivery {delivery.id} cancelled prior to dispatch: invoice already paid.",
-                    created_at=now
+                    created_at=now,
                 )
                 db.add(activity)
                 db.commit()
@@ -91,26 +90,25 @@ def process_batch(db: Session, batch_size: int = 10, provider: EmailProvider | N
 
             # 3. Fresh Pre-Send Pause & Suppression Check (Disputes & Promises)
             policy = db.scalar(
-                select(CollectionPolicy).where(CollectionPolicy.organization_id == delivery.organization_id)
+                select(CollectionPolicy).where(
+                    CollectionPolicy.organization_id == delivery.organization_id
+                )
             )
             disputes = db.scalars(
                 select(CollectionDispute).where(
                     CollectionDispute.invoice_id == delivery.invoice_id,
-                    CollectionDispute.organization_id == delivery.organization_id
+                    CollectionDispute.organization_id == delivery.organization_id,
                 )
             ).all()
             promises = db.scalars(
                 select(PaymentPromise).where(
                     PaymentPromise.invoice_id == delivery.invoice_id,
-                    PaymentPromise.organization_id == delivery.organization_id
+                    PaymentPromise.organization_id == delivery.organization_id,
                 )
             ).all()
 
             pause_result = evaluate_pause_conditions(
-                policy=policy,
-                disputes=list(disputes),
-                promises=list(promises),
-                as_of_date=now
+                policy=policy, disputes=list(disputes), promises=list(promises), as_of_date=now
             )
 
             if pause_result.is_paused:
@@ -118,7 +116,9 @@ def process_batch(db: Session, batch_size: int = 10, provider: EmailProvider | N
                 delivery.status = DeliveryStatus.BLOCKED
                 delivery.blocked_at = now
                 delivery.last_error_code = "SUPPRESSED"
-                delivery.last_error_summary = f"Delivery suppressed prior to dispatch due to active {reasons_str}"
+                delivery.last_error_summary = (
+                    f"Delivery suppressed prior to dispatch due to active {reasons_str}"
+                )
 
                 activity = CollectionActivity(
                     organization_id=delivery.organization_id,
@@ -126,7 +126,7 @@ def process_batch(db: Session, batch_size: int = 10, provider: EmailProvider | N
                     invoice_id=delivery.invoice_id,
                     event_type=EventType.COLLECTION_PAUSED,
                     description=f"Email delivery {delivery.id} blocked prior to dispatch: {reasons_str} active.",
-                    created_at=now
+                    created_at=now,
                 )
                 db.add(activity)
                 db.commit()
@@ -141,7 +141,7 @@ def process_batch(db: Session, batch_size: int = 10, provider: EmailProvider | N
                 email_delivery_id=delivery.id,
                 attempt_number=attempt_num,
                 started_at=now,
-                result_status="PENDING"
+                result_status="PENDING",
             )
             db.add(attempt)
             db.commit()
@@ -152,9 +152,9 @@ def process_batch(db: Session, batch_size: int = 10, provider: EmailProvider | N
                     to_email=delivery.recipient_email,
                     subject=delivery.subject_snapshot,
                     body=delivery.body_snapshot,
-                    idempotency_key=delivery.idempotency_key
+                    idempotency_key=delivery.idempotency_key,
                 )
-                
+
                 # Provider success
                 comp_now = datetime.now(UTC)
                 delivery.status = DeliveryStatus.ACCEPTED
@@ -175,7 +175,7 @@ def process_batch(db: Session, batch_size: int = 10, provider: EmailProvider | N
                     invoice_id=delivery.invoice_id,
                     event_type=EventType.MESSAGE_APPROVED,
                     description=f"Email successfully accepted by delivery provider. ID: {res['provider_message_id']}",
-                    created_at=comp_now
+                    created_at=comp_now,
                 )
                 db.add(activity)
                 db.commit()
@@ -243,11 +243,13 @@ def run_worker(once: bool = False, poll_interval: int = 10):
 
         if processed == 0:
             import time
+
             time.sleep(poll_interval)
 
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--once", action="store_true", help="Process one batch and exit")
     args = parser.parse_args()

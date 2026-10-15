@@ -10,6 +10,7 @@ class CollectionStageSummary(BaseModel):
     invoices_count: int
     outstanding_amount: Decimal
 
+
 class CurrencyCollectionSummary(BaseModel):
     currency: str
     eligible_invoices_count: int

@@ -15,7 +15,7 @@ def get_effective_policy(policy: CollectionPolicy | None) -> dict:
             "escalation_after_days": policy.escalation_after_days,
             "require_approval_before_send": policy.require_approval_before_send,
             "pause_collection_on_dispute": policy.pause_collection_on_dispute,
-            "pause_collection_on_payment_promise": policy.pause_collection_on_payment_promise
+            "pause_collection_on_payment_promise": policy.pause_collection_on_payment_promise,
         }
     return {
         "initial_reminder_after_days": 1,
@@ -23,7 +23,7 @@ def get_effective_policy(policy: CollectionPolicy | None) -> dict:
         "escalation_after_days": 31,
         "require_approval_before_send": True,
         "pause_collection_on_dispute": True,
-        "pause_collection_on_payment_promise": True
+        "pause_collection_on_payment_promise": True,
     }
 
 
@@ -42,10 +42,10 @@ def evaluate_collection_status(
     """
     if as_of_date is None:
         as_of_date = datetime.now(UTC)
-        
+
     if invoice_balance.payment_status == "PAID":
         return None
-        
+
     if invoice_balance.outstanding_amount <= 0:
         return None
 
@@ -54,12 +54,8 @@ def evaluate_collection_status(
 
     # Check pause conditions first
     from app.services.collection_pause_service import evaluate_pause_conditions
-    pause_eval = evaluate_pause_conditions(
-        policy, 
-        disputes or [], 
-        promises or [], 
-        as_of_date
-    )
+
+    pause_eval = evaluate_pause_conditions(policy, disputes or [], promises or [], as_of_date)
 
     if pause_eval.is_paused:
         if "DISPUTE" in pause_eval.pause_reasons:
@@ -112,5 +108,5 @@ def evaluate_collection_status(
         days_overdue=days_overdue,
         collection_stage=stage,
         recommended_action=action,
-        recommendation_reason=reason
+        recommendation_reason=reason,
     )

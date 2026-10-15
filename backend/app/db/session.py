@@ -9,6 +9,7 @@ from app.core.config import settings
 engine = None
 SessionLocal = None
 
+
 def _build_engine(database_url: str):
     """
     Construct a hardened SQLAlchemy engine with dialect-specific connection arguments.

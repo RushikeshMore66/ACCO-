@@ -27,5 +27,5 @@ class EmailDeliveryResponse(BaseModel):
     bounced_at: datetime | None
     complained_at: datetime | None
     blocked_at: datetime | None
-    
+
     model_config = ConfigDict(from_attributes=True)

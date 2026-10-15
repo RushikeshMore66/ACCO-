@@ -2,6 +2,7 @@
 Worker tasks for evaluating broken promises to pay and scheduling follow-ups.
 Deterministic state-transition engine for payment promises.
 """
+
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -29,6 +30,7 @@ def sweep_expired_promises_task() -> int:
     with SessionLocal() as db:
         return sweep_expired_promises(db)
 
+
 def sweep_expired_promises(db: Session, as_of_date: datetime | None = None) -> int:
     """
     Find active promises whose expected payment date has passed.
@@ -42,8 +44,7 @@ def sweep_expired_promises(db: Session, as_of_date: datetime | None = None) -> i
     today = as_of_date.date()
 
     query = select(PaymentPromise).where(
-        PaymentPromise.status == PromiseStatus.ACTIVE,
-        PaymentPromise.expected_payment_date < today
+        PaymentPromise.status == PromiseStatus.ACTIVE, PaymentPromise.expected_payment_date < today
     )
     if db.bind and db.bind.dialect.name == "postgresql":
         query = query.with_for_update()
@@ -64,7 +65,7 @@ def sweep_expired_promises(db: Session, as_of_date: datetime | None = None) -> i
                 Payment.currency == promise.currency,
                 PaymentAllocation.created_at >= promise.created_at,
                 Payment.payment_date <= promise.expected_payment_date,
-                PaymentReversal.id.is_(None)
+                PaymentReversal.id.is_(None),
             )
         ).all()
 
@@ -86,7 +87,7 @@ def sweep_expired_promises(db: Session, as_of_date: datetime | None = None) -> i
             customer_id=promise.customer_id,
             event_type=event_type,
             description=desc,
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         db.add(activity)
         updated_count += 1

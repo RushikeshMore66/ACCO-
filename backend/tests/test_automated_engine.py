@@ -311,7 +311,9 @@ def test_scenario_e_promise_sweep_transitions(db_session, test_setup):
     assert status.collection_stage == "BROKEN_PROMISE_FOLLOWUP"
 
 
-def test_scenario_f_reversal_invalidates_fulfilled_promise(client, db_session, test_setup, normal_user_token_headers):
+def test_scenario_f_reversal_invalidates_fulfilled_promise(
+    client, db_session, test_setup, normal_user_token_headers
+):
     """
     Scenario F: Payment allocation fulfills promise -> payment is reversed ->
     fulfilled promise is automatically reverted to ACTIVE or MISSED.
@@ -432,9 +434,7 @@ def test_scenario_h_tenant_isolation(client, db_session, test_setup, normal_user
     db_session.refresh(other_org)
 
     other_customer = Customer(
-        organization_id=other_org.id,
-        name="Other Cust",
-        email="other@cust.com"
+        organization_id=other_org.id, name="Other Cust", email="other@cust.com"
     )
     db_session.add(other_customer)
     db_session.commit()
@@ -481,4 +481,3 @@ def test_scenario_h_tenant_isolation(client, db_session, test_setup, normal_user
         json={"reason": "Unauthorized attempt"},
     )
     assert resp.status_code == 404
-

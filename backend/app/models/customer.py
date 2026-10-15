@@ -17,11 +17,12 @@ if TYPE_CHECKING:
 class Customer(Base):
     __tablename__ = "customers"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     organization_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     contact_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -29,23 +30,27 @@ class Customer(Base):
     phone: Mapped[str | None] = mapped_column(String(255), nullable=True)
     billing_address: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     tax_identifier: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    
+
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), 
-        default=lambda: datetime.now(UTC), 
-        onupdate=lambda: datetime.now(UTC), 
-        nullable=False
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        nullable=False,
     )
 
     organization: Mapped["Organization"] = relationship("Organization", back_populates="customers")
-    invoices: Mapped[list["Invoice"]] = relationship("Invoice", back_populates="customer", overlaps="invoices")
-    payments: Mapped[list["Payment"]] = relationship("Payment", back_populates="customer", overlaps="payments")
+    invoices: Mapped[list["Invoice"]] = relationship(
+        "Invoice", back_populates="customer", overlaps="invoices"
+    )
+    payments: Mapped[list["Payment"]] = relationship(
+        "Payment", back_populates="customer", overlaps="payments"
+    )
 
     __table_args__ = (
-        UniqueConstraint('organization_id', 'id', name='uq_customer_organization_id'),
+        UniqueConstraint("organization_id", "id", name="uq_customer_organization_id"),
     )

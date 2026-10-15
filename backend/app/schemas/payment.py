@@ -32,7 +32,7 @@ class PaymentAllocationResponse(BaseModel):
     invoice_id: uuid.UUID
     amount: Decimal
     created_at: datetime
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -40,7 +40,7 @@ class PaymentReversalResponse(BaseModel):
     id: uuid.UUID
     reason: str
     reversed_at: datetime
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -55,11 +55,11 @@ class PaymentResponse(BaseModel):
     reference: str | None
     notes: str | None
     created_at: datetime
-    
+
     # Derived fields for response
     allocated_amount: Decimal = Decimal("0.00")
     unallocated_amount: Decimal = Decimal("0.00")
-    
+
     allocations: list[PaymentAllocationResponse] = []
     reversal: PaymentReversalResponse | None = None
 

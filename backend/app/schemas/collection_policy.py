@@ -12,8 +12,8 @@ class CollectionPolicyUpdate(BaseModel):
     pause_collection_on_dispute: bool = True
     pause_collection_on_payment_promise: bool = True
 
-    @model_validator(mode='after')
-    def validate_thresholds(self) -> 'CollectionPolicyUpdate':
+    @model_validator(mode="after")
+    def validate_thresholds(self) -> "CollectionPolicyUpdate":
         if not (self.initial_reminder_after_days >= 1):
             raise ValueError("initial_reminder_after_days must be >= 1")
         if not (self.follow_up_after_days > self.initial_reminder_after_days):

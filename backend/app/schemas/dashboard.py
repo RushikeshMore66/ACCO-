@@ -13,6 +13,7 @@ class AttentionItem(BaseModel):
     priority: str  # "urgent", "high", "medium"
     link: str
 
+
 class CurrencyKpi(BaseModel):
     currency: str
     total_outstanding: Decimal
@@ -20,6 +21,7 @@ class CurrencyKpi(BaseModel):
     total_promised: Decimal
     active_invoices_count: int
     overdue_invoices_count: int
+
 
 class DashboardSummaryResponse(BaseModel):
     kpis: list[CurrencyKpi]

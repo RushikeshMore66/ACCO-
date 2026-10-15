@@ -16,6 +16,7 @@ def calculate_days_overdue(due_date: datetime, as_of_date: datetime) -> int:
     delta = (as_of_date.date() - due_date.date()).days
     return max(delta, 0)
 
+
 def get_aging_bucket(days_overdue: int) -> str:
     if days_overdue == 0:
         return "NOT_DUE"
@@ -28,6 +29,7 @@ def get_aging_bucket(days_overdue: int) -> str:
     else:
         return "90_PLUS"
 
+
 def get_payment_status(paid_amount: Decimal, total_amount: Decimal) -> str:
     if paid_amount >= total_amount:
         return "PAID"
@@ -36,33 +38,35 @@ def get_payment_status(paid_amount: Decimal, total_amount: Decimal) -> str:
     else:
         return "UNPAID"
 
-def get_invoice_balance(db: Session, invoice: Invoice, as_of_date: datetime | None = None) -> InvoiceBalanceResponse:
+
+def get_invoice_balance(
+    db: Session, invoice: Invoice, as_of_date: datetime | None = None
+) -> InvoiceBalanceResponse:
     if as_of_date is None:
         as_of_date = datetime.now(UTC)
-        
+
     # Active allocations are those where the payment is not reversed
     stmt = (
         select(func.coalesce(func.sum(PaymentAllocation.amount), 0))
         .join(Payment, PaymentAllocation.payment_id == Payment.id)
         .outerjoin(PaymentReversal, Payment.id == PaymentReversal.payment_id)
-        .filter(
-            PaymentAllocation.invoice_id == invoice.id,
-            PaymentReversal.id.is_(None)
-        )
+        .filter(PaymentAllocation.invoice_id == invoice.id, PaymentReversal.id.is_(None))
     )
     paid_amount = db.execute(stmt).scalar() or Decimal("0.00")
-    
+
     # Internal integrity check
     if paid_amount > invoice.total_amount:
-        raise ValueError(f"Data integrity error: Paid amount {paid_amount} exceeds total amount {invoice.total_amount} for invoice {invoice.id}")
+        raise ValueError(
+            f"Data integrity error: Paid amount {paid_amount} exceeds total amount {invoice.total_amount} for invoice {invoice.id}"
+        )
 
     outstanding_amount = invoice.total_amount - paid_amount
-    
+
     payment_status = get_payment_status(paid_amount, invoice.total_amount)
-    
+
     days_overdue = 0
     aging_bucket = "NOT_DUE"
-    
+
     if payment_status == "PAID":
         aging_bucket = "PAID"
     else:
@@ -81,5 +85,5 @@ def get_invoice_balance(db: Session, invoice: Invoice, as_of_date: datetime | No
         issue_date=invoice.issue_date,
         due_date=invoice.due_date,
         days_overdue=days_overdue,
-        aging_bucket=aging_bucket
+        aging_bucket=aging_bucket,
     )

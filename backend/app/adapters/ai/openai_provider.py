@@ -2,6 +2,7 @@
 
 No tools or external actions are enabled. Customer text is always untrusted input.
 """
+
 from __future__ import annotations
 
 from typing import Protocol
@@ -103,6 +104,4 @@ class OpenAIProviderAdapter:
                 "The AI provider request failed. Please retry later."
             ) from None
         except (OpenAIError, ValidationError, IndexError, AttributeError, TypeError, ValueError):
-            raise AIProviderUnavailable(
-                "The AI provider returned an unusable analysis."
-            ) from None
+            raise AIProviderUnavailable("The AI provider returned an unusable analysis.") from None

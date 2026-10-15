@@ -40,16 +40,15 @@ class PaymentMethod(str, enum.Enum):
 class Payment(Base):
     __tablename__ = "payments"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     organization_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
-    customer_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False, index=True
-    )
-    
+    customer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     payment_date: Mapped[datetime] = mapped_column(Date, nullable=False, index=True)
@@ -58,28 +57,42 @@ class Payment(Base):
     )
     reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    
+
     recorded_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
 
-    organization: Mapped["Organization"] = relationship("Organization", back_populates="payments", foreign_keys=[organization_id], overlaps="payments")
-    customer: Mapped["Customer"] = relationship("Customer", back_populates="payments", primaryjoin="and_(Payment.organization_id==Customer.organization_id, Payment.customer_id==Customer.id)", overlaps="organization,payments")
+    organization: Mapped["Organization"] = relationship(
+        "Organization",
+        back_populates="payments",
+        foreign_keys=[organization_id],
+        overlaps="payments",
+    )
+    customer: Mapped["Customer"] = relationship(
+        "Customer",
+        back_populates="payments",
+        primaryjoin="and_(Payment.organization_id==Customer.organization_id, Payment.customer_id==Customer.id)",
+        overlaps="organization,payments",
+    )
     recorded_by: Mapped["User"] = relationship("User", foreign_keys=[recorded_by_user_id])
-    
-    allocations: Mapped[list["PaymentAllocation"]] = relationship("PaymentAllocation", back_populates="payment", overlaps="allocations")
-    reversal: Mapped["PaymentReversal | None"] = relationship("PaymentReversal", back_populates="payment", uselist=False, overlaps="reversal")
+
+    allocations: Mapped[list["PaymentAllocation"]] = relationship(
+        "PaymentAllocation", back_populates="payment", overlaps="allocations"
+    )
+    reversal: Mapped["PaymentReversal | None"] = relationship(
+        "PaymentReversal", back_populates="payment", uselist=False, overlaps="reversal"
+    )
 
     __table_args__ = (
         ForeignKeyConstraint(
-            ['organization_id', 'customer_id'],
-            ['customers.organization_id', 'customers.id'],
-            name='fk_payment_customer_org'
+            ["organization_id", "customer_id"],
+            ["customers.organization_id", "customers.id"],
+            name="fk_payment_customer_org",
         ),
-        UniqueConstraint('organization_id', 'id', name='uq_payment_organization_id'),
-        UniqueConstraint('organization_id', 'id', 'customer_id', name='uq_payment_org_id_customer'),
+        UniqueConstraint("organization_id", "id", name="uq_payment_organization_id"),
+        UniqueConstraint("organization_id", "id", "customer_id", name="uq_payment_org_id_customer"),
     )

@@ -21,11 +21,10 @@ class Organization(Base):
     """
     Organization tenant model representing business entities.
     """
+
     __tablename__ = "organizations"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -33,10 +32,10 @@ class Organization(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), 
-        default=lambda: datetime.now(UTC), 
-        onupdate=lambda: datetime.now(UTC), 
-        nullable=False
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        nullable=False,
     )
 
     users: Mapped[list["User"]] = relationship(
@@ -52,5 +51,8 @@ class Organization(Base):
         "Payment", back_populates="organization", cascade="all, delete-orphan"
     )
     collection_policy: Mapped["CollectionPolicy | None"] = relationship(
-        "CollectionPolicy", back_populates="organization", cascade="all, delete-orphan", uselist=False
+        "CollectionPolicy",
+        back_populates="organization",
+        cascade="all, delete-orphan",
+        uselist=False,
     )

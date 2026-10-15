@@ -3,6 +3,7 @@ from typing import Any
 
 class ACCOException(Exception):
     """Base exception for all ACCO application errors."""
+
     def __init__(self, message: str, details: Any | None = None) -> None:
         super().__init__(message)
         self.message = message

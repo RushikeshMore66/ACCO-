@@ -15,8 +15,10 @@ class PromiseCreate(BaseModel):
     reply_analysis_id: uuid.UUID | None = None
     notes: str | None = None
 
+
 class PromiseCancel(BaseModel):
     cancellation_reason: str
+
 
 class PromiseResponse(BaseModel):
     id: uuid.UUID
@@ -36,15 +38,19 @@ class PromiseResponse(BaseModel):
     resolved_at: datetime | None
     model_config = ConfigDict(from_attributes=True)
 
+
 class DisputeCreate(BaseModel):
     category: DisputeCategory
     description: str
 
+
 class DisputeResolve(BaseModel):
     resolution_notes: str
 
+
 class DisputeReject(BaseModel):
     rejection_reason: str
+
 
 class DisputeResponse(BaseModel):
     id: uuid.UUID

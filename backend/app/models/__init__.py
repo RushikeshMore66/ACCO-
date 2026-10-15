@@ -1,6 +1,7 @@
 """
 ACCO Database Models package.
 """
+
 from app.db.base import Base
 from app.models.collection_policy import CollectionPolicy
 from app.models.collection_workflow import (

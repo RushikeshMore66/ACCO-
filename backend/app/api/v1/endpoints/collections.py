@@ -22,20 +22,23 @@ from app.services.receivables import get_invoice_balance
 
 router = APIRouter()
 
+
 @router.get("/policy", response_model=CollectionPolicyResponse)
 def get_policy(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Any:
     policy = db.scalar(
-        select(CollectionPolicy)
-        .where(CollectionPolicy.organization_id == current_user.organization_id)
+        select(CollectionPolicy).where(
+            CollectionPolicy.organization_id == current_user.organization_id
+        )
     )
     if policy:
         return policy
-    
+
     # Return default policy
     return get_effective_policy(None)
+
 
 @router.put("/policy", response_model=CollectionPolicyResponse)
 def update_policy(
@@ -49,7 +52,7 @@ def update_policy(
         .where(CollectionPolicy.organization_id == current_user.organization_id)
         .with_for_update()
     )
-    
+
     if policy:
         policy.initial_reminder_after_days = policy_in.initial_reminder_after_days
         policy.follow_up_after_days = policy_in.follow_up_after_days
@@ -65,13 +68,14 @@ def update_policy(
             escalation_after_days=policy_in.escalation_after_days,
             require_approval_before_send=policy_in.require_approval_before_send,
             pause_collection_on_dispute=policy_in.pause_collection_on_dispute,
-            pause_collection_on_payment_promise=policy_in.pause_collection_on_payment_promise
+            pause_collection_on_payment_promise=policy_in.pause_collection_on_payment_promise,
         )
         db.add(policy)
-        
+
     db.commit()
     db.refresh(policy)
     return policy
+
 
 from app.models.collection_workflow import (
     CollectionDispute,
@@ -92,27 +96,31 @@ def get_collection_queue(
     offset: int = Query(0, ge=0),
 ) -> Any:
     policy = db.scalar(
-        select(CollectionPolicy)
-        .where(CollectionPolicy.organization_id == current_user.organization_id)
+        select(CollectionPolicy).where(
+            CollectionPolicy.organization_id == current_user.organization_id
+        )
     )
-    
-    stmt = select(Invoice, Customer.name.label('customer_name')).join(Customer).where(
-        Invoice.organization_id == current_user.organization_id,
-        Invoice.status == InvoiceStatus.ISSUED
+
+    stmt = (
+        select(Invoice, Customer.name.label("customer_name"))
+        .join(Customer)
+        .where(
+            Invoice.organization_id == current_user.organization_id,
+            Invoice.status == InvoiceStatus.ISSUED,
+        )
     )
     if customer_id:
         stmt = stmt.where(Invoice.customer_id == customer_id)
     if currency:
         stmt = stmt.where(Invoice.currency == currency)
-        
+
     invoices = db.execute(stmt).all()
 
     # Pre-fetch active disputes and promises for this tenant to avoid N+1 queries
     all_disputes = db.scalars(
-        select(CollectionDispute)
-        .where(
+        select(CollectionDispute).where(
             CollectionDispute.organization_id == current_user.organization_id,
-            CollectionDispute.status.in_([DisputeStatus.OPEN, DisputeStatus.UNDER_REVIEW])
+            CollectionDispute.status.in_([DisputeStatus.OPEN, DisputeStatus.UNDER_REVIEW]),
         )
     ).all()
     disputes_by_inv: dict[uuid.UUID, list[CollectionDispute]] = {}
@@ -120,37 +128,31 @@ def get_collection_queue(
         disputes_by_inv.setdefault(d.invoice_id, []).append(d)
 
     all_promises = db.scalars(
-        select(PaymentPromise)
-        .where(
+        select(PaymentPromise).where(
             PaymentPromise.organization_id == current_user.organization_id,
-            PaymentPromise.status == PromiseStatus.ACTIVE
+            PaymentPromise.status == PromiseStatus.ACTIVE,
         )
     ).all()
     promises_by_inv: dict[uuid.UUID, list[PaymentPromise]] = {}
     for p in all_promises:
         promises_by_inv.setdefault(p.invoice_id, []).append(p)
-    
+
     as_of_date = datetime.now(UTC)
     queue = []
-    
+
     for inv, customer_name in invoices:
         balance = get_invoice_balance(db, inv)
         inv_disputes = disputes_by_inv.get(inv.id, [])
         inv_promises = promises_by_inv.get(inv.id, [])
         evaluation = evaluate_collection_status(
-            balance, 
-            policy, 
-            customer_name, 
-            as_of_date,
-            disputes=inv_disputes,
-            promises=inv_promises
+            balance, policy, customer_name, as_of_date, disputes=inv_disputes, promises=inv_promises
         )
-        
+
         if evaluation:
             if stage and evaluation.collection_stage != stage:
                 continue
             queue.append(evaluation)
-            
+
     stage_priority = {
         "BROKEN_PROMISE_FOLLOWUP": 0,
         "ESCALATION_REVIEW": 1,
@@ -160,15 +162,17 @@ def get_collection_queue(
         "NOT_DUE": 5,
         "PAUSED_DISPUTE": 6,
         "PAUSED_PROMISE": 7,
-        "PAUSED": 8
+        "PAUSED": 8,
     }
-    
-    queue.sort(key=lambda x: (
-        stage_priority.get(x.collection_stage, 99),
-        -x.days_overdue,
-        str(x.invoice_id)
-    ))
-    
+
+    queue.sort(
+        key=lambda x: (
+            stage_priority.get(x.collection_stage, 99),
+            -x.days_overdue,
+            str(x.invoice_id),
+        )
+    )
+
     return queue[offset : offset + limit]
 
 
@@ -178,23 +182,27 @@ def get_collection_summary(
     current_user: User = Depends(get_current_user),
 ) -> Any:
     policy = db.scalar(
-        select(CollectionPolicy)
-        .where(CollectionPolicy.organization_id == current_user.organization_id)
+        select(CollectionPolicy).where(
+            CollectionPolicy.organization_id == current_user.organization_id
+        )
     )
-    
-    stmt = select(Invoice, Customer.name.label('customer_name')).join(Customer).where(
-        Invoice.organization_id == current_user.organization_id,
-        Invoice.status == InvoiceStatus.ISSUED
+
+    stmt = (
+        select(Invoice, Customer.name.label("customer_name"))
+        .join(Customer)
+        .where(
+            Invoice.organization_id == current_user.organization_id,
+            Invoice.status == InvoiceStatus.ISSUED,
+        )
     )
-    
+
     invoices = db.execute(stmt).all()
 
     # Pre-fetch active disputes and promises
     all_disputes = db.scalars(
-        select(CollectionDispute)
-        .where(
+        select(CollectionDispute).where(
             CollectionDispute.organization_id == current_user.organization_id,
-            CollectionDispute.status.in_([DisputeStatus.OPEN, DisputeStatus.UNDER_REVIEW])
+            CollectionDispute.status.in_([DisputeStatus.OPEN, DisputeStatus.UNDER_REVIEW]),
         )
     ).all()
     disputes_by_inv: dict[uuid.UUID, list[CollectionDispute]] = {}
@@ -202,10 +210,9 @@ def get_collection_summary(
         disputes_by_inv.setdefault(d.invoice_id, []).append(d)
 
     all_promises = db.scalars(
-        select(PaymentPromise)
-        .where(
+        select(PaymentPromise).where(
             PaymentPromise.organization_id == current_user.organization_id,
-            PaymentPromise.status == PromiseStatus.ACTIVE
+            PaymentPromise.status == PromiseStatus.ACTIVE,
         )
     ).all()
     promises_by_inv: dict[uuid.UUID, list[PaymentPromise]] = {}
@@ -213,22 +220,17 @@ def get_collection_summary(
         promises_by_inv.setdefault(p.invoice_id, []).append(p)
 
     as_of_date = datetime.now(UTC)
-    
+
     summaries_by_currency = {}
-    
+
     for inv, customer_name in invoices:
         balance = get_invoice_balance(db, inv)
         inv_disputes = disputes_by_inv.get(inv.id, [])
         inv_promises = promises_by_inv.get(inv.id, [])
         evaluation = evaluate_collection_status(
-            balance, 
-            policy, 
-            customer_name, 
-            as_of_date,
-            disputes=inv_disputes,
-            promises=inv_promises
+            balance, policy, customer_name, as_of_date, disputes=inv_disputes, promises=inv_promises
         )
-        
+
         if evaluation:
             c = evaluation.currency
             if c not in summaries_by_currency:
@@ -237,16 +239,16 @@ def get_collection_summary(
                     "total_outstanding_amount": 0,
                     "overdue_invoices_count": 0,
                     "total_overdue_amount": 0,
-                    "stages": {}
+                    "stages": {},
                 }
-                
+
             summaries_by_currency[c]["eligible_invoices_count"] += 1
             summaries_by_currency[c]["total_outstanding_amount"] += evaluation.outstanding_amount
-            
+
             if evaluation.days_overdue > 0:
                 summaries_by_currency[c]["overdue_invoices_count"] += 1
                 summaries_by_currency[c]["total_overdue_amount"] += evaluation.outstanding_amount
-                
+
             st = evaluation.collection_stage
             if st not in summaries_by_currency[c]["stages"]:
                 summaries_by_currency[c]["stages"][st] = {"count": 0, "amount": 0}
@@ -256,16 +258,20 @@ def get_collection_summary(
     result = []
     for c, data in summaries_by_currency.items():
         stages_list = [
-            CollectionStageSummary(stage=st, invoices_count=st_data["count"], outstanding_amount=st_data["amount"])
+            CollectionStageSummary(
+                stage=st, invoices_count=st_data["count"], outstanding_amount=st_data["amount"]
+            )
             for st, st_data in data["stages"].items()
         ]
-        result.append(CurrencyCollectionSummary(
-            currency=c,
-            eligible_invoices_count=data["eligible_invoices_count"],
-            total_outstanding_amount=data["total_outstanding_amount"],
-            overdue_invoices_count=data["overdue_invoices_count"],
-            total_overdue_amount=data["total_overdue_amount"],
-            stages=stages_list
-        ))
-        
+        result.append(
+            CurrencyCollectionSummary(
+                currency=c,
+                eligible_invoices_count=data["eligible_invoices_count"],
+                total_outstanding_amount=data["total_outstanding_amount"],
+                overdue_invoices_count=data["overdue_invoices_count"],
+                total_overdue_amount=data["total_overdue_amount"],
+                stages=stages_list,
+            )
+        )
+
     return result

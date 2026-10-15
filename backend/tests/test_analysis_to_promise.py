@@ -1,4 +1,5 @@
 """Tests for linking Agent 09 CustomerReplyAnalysis to Agent 10 PaymentPromise"""
+
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -28,7 +29,7 @@ def promise_workflow_data(db_session, normal_user_token_headers):
     )
     db_session.add(customer)
     db_session.commit()
-    
+
     invoice = Invoice(
         organization_id=user.organization_id,
         customer_id=customer.id,
@@ -41,7 +42,7 @@ def promise_workflow_data(db_session, normal_user_token_headers):
     )
     db_session.add(invoice)
     db_session.commit()
-    
+
     message = CollectionMessage(
         organization_id=user.organization_id,
         customer_id=customer.id,
@@ -55,7 +56,7 @@ def promise_workflow_data(db_session, normal_user_token_headers):
     )
     db_session.add(message)
     db_session.commit()
-    
+
     analysis = CustomerReplyAnalysis(
         organization_id=user.organization_id,
         source_message_id=message.id,
@@ -73,104 +74,123 @@ def promise_workflow_data(db_session, normal_user_token_headers):
     )
     db_session.add(analysis)
     db_session.commit()
-    
+
     return {
         "user": user,
         "customer": customer,
         "invoice": invoice,
         "message": message,
         "analysis": analysis,
-        "headers": normal_user_token_headers
+        "headers": normal_user_token_headers,
     }
+
 
 def test_manual_promise_without_analysis(client: TestClient, db_session, promise_workflow_data):
     invoice = promise_workflow_data["invoice"]
     headers = promise_workflow_data["headers"]
-    
+
     tomorrow = (datetime.now(UTC) + timedelta(days=1)).date()
-    
-    payload = {
-        "promised_amount": 100.00,
-        "expected_payment_date": str(tomorrow)
-    }
-    response = client.post(f"/api/v1/collections/invoices/{invoice.id}/promises", headers=headers, json=payload)
+
+    payload = {"promised_amount": 100.00, "expected_payment_date": str(tomorrow)}
+    response = client.post(
+        f"/api/v1/collections/invoices/{invoice.id}/promises", headers=headers, json=payload
+    )
     assert response.status_code == 200, response.text
     data = response.json()
     assert data["reply_analysis_id"] is None
-    
+
     # Clean up to allow other tests
     db_session.query(PaymentPromise).delete()
     db_session.commit()
 
-def test_analysis_to_promise_success_and_retry(client: TestClient, db_session, promise_workflow_data):
+
+def test_analysis_to_promise_success_and_retry(
+    client: TestClient, db_session, promise_workflow_data
+):
     invoice = promise_workflow_data["invoice"]
     analysis = promise_workflow_data["analysis"]
     headers = promise_workflow_data["headers"]
-    
+
     tomorrow = (datetime.now(UTC) + timedelta(days=1)).date()
-    
+
     payload = {
         "promised_amount": 500.00,
         "expected_payment_date": str(tomorrow),
-        "reply_analysis_id": str(analysis.id)
+        "reply_analysis_id": str(analysis.id),
     }
-    
+
     # 1. Success
-    response = client.post(f"/api/v1/collections/invoices/{invoice.id}/promises", headers=headers, json=payload)
+    response = client.post(
+        f"/api/v1/collections/invoices/{invoice.id}/promises", headers=headers, json=payload
+    )
     assert response.status_code == 200, response.text
     data = response.json()
     assert data["reply_analysis_id"] == str(analysis.id)
     assert data["source_message_id"] == str(analysis.source_message_id)
-    
+
     # 2. Retry (idempotency)
-    response_retry = client.post(f"/api/v1/collections/invoices/{invoice.id}/promises", headers=headers, json=payload)
+    response_retry = client.post(
+        f"/api/v1/collections/invoices/{invoice.id}/promises", headers=headers, json=payload
+    )
     assert response_retry.status_code == 200
     assert response_retry.json()["id"] == data["id"]
-    
+
     # 3. Conflicting retry
     payload["promised_amount"] = 600.00
-    response_conflict = client.post(f"/api/v1/collections/invoices/{invoice.id}/promises", headers=headers, json=payload)
+    response_conflict = client.post(
+        f"/api/v1/collections/invoices/{invoice.id}/promises", headers=headers, json=payload
+    )
     assert response_conflict.status_code == 409
     assert "conflicting promise" in response_conflict.json()["detail"].lower()
-    
+
     # Clean up
     db_session.query(PaymentPromise).delete()
     db_session.commit()
 
-def test_analysis_to_promise_rejected_if_pending(client: TestClient, db_session, promise_workflow_data):
+
+def test_analysis_to_promise_rejected_if_pending(
+    client: TestClient, db_session, promise_workflow_data
+):
     invoice = promise_workflow_data["invoice"]
     analysis = promise_workflow_data["analysis"]
     headers = promise_workflow_data["headers"]
-    
+
     analysis.status = AnalysisStatus.PENDING_REVIEW
     db_session.commit()
-    
+
     tomorrow = (datetime.now(UTC) + timedelta(days=1)).date()
-    
+
     payload = {
         "promised_amount": 500.00,
         "expected_payment_date": str(tomorrow),
-        "reply_analysis_id": str(analysis.id)
+        "reply_analysis_id": str(analysis.id),
     }
-    response = client.post(f"/api/v1/collections/invoices/{invoice.id}/promises", headers=headers, json=payload)
+    response = client.post(
+        f"/api/v1/collections/invoices/{invoice.id}/promises", headers=headers, json=payload
+    )
     assert response.status_code == 400
     assert "must be accepted" in response.json()["detail"].lower()
 
-def test_analysis_to_promise_rejected_if_wrong_classification(client: TestClient, db_session, promise_workflow_data):
+
+def test_analysis_to_promise_rejected_if_wrong_classification(
+    client: TestClient, db_session, promise_workflow_data
+):
     invoice = promise_workflow_data["invoice"]
     analysis = promise_workflow_data["analysis"]
     headers = promise_workflow_data["headers"]
-    
+
     analysis.classification = ReplyClassification.DISPUTE
     db_session.commit()
-    
+
     tomorrow = (datetime.now(UTC) + timedelta(days=1)).date()
-    
+
     payload = {
         "promised_amount": 500.00,
         "expected_payment_date": str(tomorrow),
-        "reply_analysis_id": str(analysis.id)
+        "reply_analysis_id": str(analysis.id),
     }
-    response = client.post(f"/api/v1/collections/invoices/{invoice.id}/promises", headers=headers, json=payload)
+    response = client.post(
+        f"/api/v1/collections/invoices/{invoice.id}/promises", headers=headers, json=payload
+    )
     assert response.status_code == 400
     assert "classified as a payment promise" in response.json()["detail"].lower()

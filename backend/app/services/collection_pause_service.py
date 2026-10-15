@@ -18,11 +18,12 @@ class PauseResult(BaseModel):
     active_promise_count: int
     requires_follow_up: bool
 
+
 def evaluate_pause_conditions(
     policy: CollectionPolicy | None,
     disputes: list[CollectionDispute],
     promises: list[PaymentPromise],
-    as_of_date: datetime
+    as_of_date: datetime,
 ) -> PauseResult:
     is_paused = False
     reasons = []
@@ -51,7 +52,7 @@ def evaluate_pause_conditions(
                 requires_follow_up = True
         elif p.status == PromiseStatus.MISSED:
             requires_follow_up = True
-                
+
     if pause_on_promise and active_promise_count > 0:
         is_paused = True
         reasons.append("PAYMENT_PROMISE")
@@ -61,5 +62,5 @@ def evaluate_pause_conditions(
         pause_reasons=reasons,
         active_dispute_count=active_dispute_count,
         active_promise_count=active_promise_count,
-        requires_follow_up=requires_follow_up
+        requires_follow_up=requires_follow_up,
     )

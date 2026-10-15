@@ -117,9 +117,7 @@ async def resend_webhook(
     svix_id = norm_headers.get("svix-id") or norm_headers.get("webhook-id")
     provider_event_id = svix_id or payload_data.get("data", {}).get("email_id") or "unknown"
     provider_message_id = (
-        payload_data.get("data", {}).get("email_id")
-        or payload_data.get("email_id")
-        or "unknown"
+        payload_data.get("data", {}).get("email_id") or payload_data.get("email_id") or "unknown"
     )
 
     # 2. Deduplicate event
@@ -136,9 +134,7 @@ async def resend_webhook(
     delivery = None
     if provider_message_id and provider_message_id != "unknown":
         delivery = db.scalar(
-            select(EmailDelivery).where(
-                EmailDelivery.provider_message_id == provider_message_id
-            )
+            select(EmailDelivery).where(EmailDelivery.provider_message_id == provider_message_id)
         )
         if delivery:
             if event_type == "email.delivered":
@@ -165,5 +161,3 @@ async def resend_webhook(
     db.commit()
 
     return {"status": "processed"}
-
-

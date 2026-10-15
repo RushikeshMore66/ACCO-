@@ -6,6 +6,7 @@ Covers:
   GET /health       – process liveness (flat path)
   GET /api/v1/health – process liveness (versioned path)
 """
+
 import pytest
 from fastapi.testclient import TestClient
 

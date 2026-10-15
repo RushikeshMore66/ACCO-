@@ -4,6 +4,7 @@ Revision ID: 6f7g8h9i0j1k
 Revises: 5e6f7g8h9i0j
 Create Date: 2026-10-10
 """
+
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
@@ -83,9 +84,7 @@ def upgrade() -> None:
         ),
         sa.ForeignKeyConstraint(["invoice_id"], ["invoices.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["customer_id"], ["customers.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(
-            ["reviewed_by_user_id"], ["users.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["reviewed_by_user_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
     for name, columns in (

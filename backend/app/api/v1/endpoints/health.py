@@ -42,4 +42,6 @@ def readiness(db: Session = Depends(get_db)) -> dict[str, str]:
         return {"status": "ok", "database": "connected"}
     except Exception:  # noqa: BLE001 - map any DB failure to an opaque 503
         # Avoid exposing raw DB credentials or internal error traces
-        raise HTTPException(status_code=503, detail="Service Unavailable: Database connection failed")
+        raise HTTPException(
+            status_code=503, detail="Service Unavailable: Database connection failed"
+        )
