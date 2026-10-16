@@ -17,7 +17,7 @@ alembic>=1.13.1
 
 # Background workers & task broker
 celery>=5.3.6
-redis>=5.0.3
+redis>=5.0.3,<6  # kombu supports <6.5; 5.x talks RESP2 so it also works with Redis 5
 
 # Testing
 pytest>=8.0.0

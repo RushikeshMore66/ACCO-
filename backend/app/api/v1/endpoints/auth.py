@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_mfa_setup_user
+from app.core.rate_limit import check_rate_limit, ip_rate_limit
 from app.core.security import get_password_hash, hash_token
 from app.db.session import get_db
 from app.models.audit_event import AuditActorType
@@ -53,7 +54,12 @@ def _token_response(tokens: SessionTokens) -> Token:
     )
 
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(ip_rate_limit("register", 10, 3600))],
+)
 def register(request: RegisterRequest, background: BackgroundTasks, db: Session = Depends(get_db)):
     email_normalized = auth_service.normalize_email(request.email)
 
@@ -98,7 +104,12 @@ def register(request: RegisterRequest, background: BackgroundTasks, db: Session 
     return user
 
 
-@router.post("/login", response_model=Token, responses={202: {"model": MfaChallenge}})
+@router.post(
+    "/login",
+    response_model=Token,
+    responses={202: {"model": MfaChallenge}},
+    dependencies=[Depends(ip_rate_limit("login", 30, 60))],
+)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """
     OAuth2 compatible login. The `username` field carries the email address.
@@ -107,6 +118,8 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     * 200 + `mfa_enrollment_required`: privileged user must enrol TOTP (limited token, no refresh).
     * 202 + `mfa_ticket`: submit a TOTP/recovery code to `/auth/mfa/verify`.
     """
+    # Per-account throttle that applies identically to unknown emails (no enumeration signal).
+    check_rate_limit("login:email", auth_service.normalize_email(form_data.username), 10, 300)
     try:
         user = auth_service.authenticate_password(db, form_data.username, form_data.password)
         outcome = auth_service.complete_password_login(db, user)
@@ -121,7 +134,11 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     return _token_response(outcome.tokens)
 
 
-@router.post("/refresh", response_model=Token)
+@router.post(
+    "/refresh",
+    response_model=Token,
+    dependencies=[Depends(ip_rate_limit("refresh", 120, 60))],
+)
 def refresh(request: RefreshRequest, db: Session = Depends(get_db)):
     """Exchange a refresh token for a new pair. Each refresh token works exactly once."""
     try:
@@ -161,7 +178,11 @@ def get_me(current_user: User = Depends(get_current_user)):
 # ----------------------------------------------------------------- email verification
 
 
-@router.post("/verify-email", response_model=MessageResponse)
+@router.post(
+    "/verify-email",
+    response_model=MessageResponse,
+    dependencies=[Depends(ip_rate_limit("verify-email", 30, 900))],
+)
 def verify_email(request: TokenRequest, db: Session = Depends(get_db)):
     try:
         auth_service.complete_email_verification(db, request.token)
@@ -171,7 +192,10 @@ def verify_email(request: TokenRequest, db: Session = Depends(get_db)):
 
 
 @router.post(
-    "/resend-verification", response_model=MessageResponse, status_code=status.HTTP_202_ACCEPTED
+    "/resend-verification",
+    response_model=MessageResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(ip_rate_limit("resend-verification", 10, 900))],
 )
 def resend_verification(
     request: EmailRequest, background: BackgroundTasks, db: Session = Depends(get_db)
@@ -188,12 +212,16 @@ def resend_verification(
 
 
 @router.post(
-    "/forgot-password", response_model=MessageResponse, status_code=status.HTTP_202_ACCEPTED
+    "/forgot-password",
+    response_model=MessageResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(ip_rate_limit("forgot-password", 10, 900))],
 )
 def forgot_password(
     request: EmailRequest, background: BackgroundTasks, db: Session = Depends(get_db)
 ):
     """Always answers identically; the email is sent after the response (no timing signal)."""
+    check_rate_limit("forgot-password:email", auth_service.normalize_email(request.email), 5, 900)
     result = auth_service.request_password_reset(db, request.email)
     if result is not None:
         user, token = result
@@ -201,7 +229,11 @@ def forgot_password(
     return MessageResponse(detail=NEUTRAL_RESET_MESSAGE)
 
 
-@router.post("/reset-password", response_model=MessageResponse)
+@router.post(
+    "/reset-password",
+    response_model=MessageResponse,
+    dependencies=[Depends(ip_rate_limit("reset-password", 10, 900))],
+)
 def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
     try:
         auth_service.complete_password_reset(db, request.token, request.new_password)
@@ -239,7 +271,11 @@ def mfa_enable(
     return MfaEnableResponse(recovery_codes=codes, session=_token_response(tokens))
 
 
-@router.post("/mfa/verify", response_model=Token)
+@router.post(
+    "/mfa/verify",
+    response_model=Token,
+    dependencies=[Depends(ip_rate_limit("mfa-verify", 20, 60))],
+)
 def mfa_verify(request: MfaVerifyRequest, db: Session = Depends(get_db)):
     """Complete a login that returned 202: submit a TOTP `code` or a one-time `recovery_code`."""
     if bool(request.code) == bool(request.recovery_code):

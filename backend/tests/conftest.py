@@ -15,6 +15,18 @@ from app.main import app
 TEST_DATABASE_URL = "sqlite:///:memory:"
 
 
+@pytest.fixture(autouse=True)
+def _rate_limits_off_and_clean(monkeypatch):
+    """Rate limiting is exercised by dedicated tests; elsewhere it must not interfere."""
+    from app.core.config import settings
+    from app.core.rate_limit import reset_rate_limits
+
+    monkeypatch.setattr(settings, "rate_limit_enabled", False)
+    reset_rate_limits()
+    yield
+    reset_rate_limits()
+
+
 @pytest.fixture(autouse=True, scope="session")
 def _fast_password_hashing():
     """Argon2id with minimal cost so the suite is not dominated by hashing (tests only)."""

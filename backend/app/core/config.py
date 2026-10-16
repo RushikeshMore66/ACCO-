@@ -62,6 +62,15 @@ class Settings(BaseSettings):
     mfa_issuer: str = "ACCO"
     mfa_recovery_code_count: int = Field(default=10, ge=5, le=20)
 
+    # HTTP hardening (Task 0.7)
+    # Comma-separated browser origins allowed to call the API cross-origin. Empty = none (the
+    # Next.js BFF calls the API server-to-server, so browsers normally never need CORS).
+    cors_allowed_origins: str = ""
+    max_request_body_bytes: int = Field(default=5 * 1024 * 1024, ge=1024)
+    max_upload_body_bytes: int = Field(default=25 * 1024 * 1024, ge=1024)
+    rate_limit_enabled: bool = True
+    enable_api_docs: bool | None = None  # None -> enabled only in development
+
     # Number of trusted reverse-proxy hops whose X-Forwarded-For entry may be believed (0 = none).
     trusted_proxy_hops: int = Field(default=0, ge=0, le=5)
 
@@ -95,6 +104,14 @@ class Settings(BaseSettings):
         if self.require_email_verification is not None:
             return self.require_email_verification
         return not self.is_development
+
+    @property
+    def api_docs_enabled(self) -> bool:
+        return self.is_development if self.enable_api_docs is None else self.enable_api_docs
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [o.strip().rstrip("/") for o in self.cors_allowed_origins.split(",") if o.strip()]
 
     @property
     def is_development(self) -> bool:
@@ -164,6 +181,29 @@ class Settings(BaseSettings):
                     errors.append(
                         "ACCO_ENCRYPTION_PRIMARY_KEY_ID does not match any configured key id."
                     )
+
+        # 1c. CORS allowlist: explicit origins only
+        for origin in self.cors_origins:
+            parsed_origin = urllib.parse.urlparse(origin)
+            if origin == "*" or "*" in origin:
+                errors.append("ACCO_CORS_ALLOWED_ORIGINS must not contain wildcards.")
+            elif (
+                parsed_origin.scheme not in ("http", "https")
+                or not parsed_origin.hostname
+                or parsed_origin.path not in ("", "/")
+            ):
+                errors.append(
+                    f"ACCO_CORS_ALLOWED_ORIGINS entry '{origin}' must look like "
+                    "'https://app.example.com' (scheme, host, optional port; no path)."
+                )
+            elif (
+                env_name == "production"
+                and parsed_origin.scheme != "https"
+                and parsed_origin.hostname not in ("localhost", "127.0.0.1")
+            ):
+                errors.append("ACCO_CORS_ALLOWED_ORIGINS must use https:// in production.")
+        if env_name == "production" and not self.frontend_base_url.lower().startswith("https://"):
+            errors.append("ACCO_FRONTEND_BASE_URL must use https:// in production.")
 
         # 2. Database URL
         if not self.database_url or not self.database_url.strip():

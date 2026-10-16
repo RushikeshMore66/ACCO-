@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.adapters.ai.openai_provider import ReplyExtractionProvider
 from app.api.deps import get_db
 from app.api.v1.endpoints.reply_analyses import get_reply_provider_factory
+from app.core.rate_limit import ip_rate_limit
 from app.models.audit_event import AuditActorType
 from app.models.audit_hooks import mark_session_actor
 from app.models.email_delivery import DeliveryStatus, EmailDelivery, EmailWebhookEvent
@@ -26,7 +27,11 @@ def get_receiving_provider_dep() -> EmailReceivingProvider:
     return get_receiving_provider()
 
 
-@router.post("/email/inbound", status_code=status.HTTP_200_OK)
+@router.post(
+    "/email/inbound",
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(ip_rate_limit("webhook-inbound", 1200, 60))],
+)
 async def inbound_email_webhook(
     request: Request,
     db: Session = Depends(get_db),
@@ -71,7 +76,11 @@ async def inbound_email_webhook(
         ) from None
 
 
-@router.post("/email/resend", status_code=status.HTTP_200_OK)
+@router.post(
+    "/email/resend",
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(ip_rate_limit("webhook-resend", 1200, 60))],
+)
 async def resend_webhook(
     request: Request,
     db: Session = Depends(get_db),
