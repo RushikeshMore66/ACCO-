@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    audit,
     auth,
     collections,
     collections_messages,
@@ -13,6 +14,7 @@ from app.api.v1.endpoints import (
     promises_disputes,
     receivables,
     reply_analyses,
+    team,
     webhooks,
 )
 
@@ -23,6 +25,12 @@ api_router.include_router(health.router, prefix="/health", tags=["health"])
 
 # Authentication
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+
+# Audit trail (OWNER/ADMIN, read-only)
+api_router.include_router(audit.router, prefix="/audit-events", tags=["audit"])
+
+# Team / user management
+api_router.include_router(team.router, prefix="/team", tags=["team"])
 
 # Customers
 api_router.include_router(customers.router, prefix="/customers", tags=["customers"])

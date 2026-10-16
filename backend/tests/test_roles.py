@@ -22,11 +22,6 @@ def _make_user(db, org: Organization, role: UserRole) -> User:
     return user
 
 
-def _headers(user: User) -> dict[str, str]:
-    token = create_access_token(subject=str(user.id), organization_id=str(user.organization_id))
-    return {"Authorization": f"Bearer {token}"}
-
-
 @pytest.fixture()
 def org(db_session) -> Organization:
     organization = Organization(name="Roles Org", slug="roles-org")
@@ -57,8 +52,10 @@ MATRIX = [
 
 
 @pytest.mark.parametrize(("role", "can_write_policy", "can_read_dashboard"), MATRIX)
-def test_permission_matrix(client, db_session, org, role, can_write_policy, can_read_dashboard):
-    headers = _headers(_make_user(db_session, org, role))
+def test_permission_matrix(
+    client, db_session, org, session_headers, role, can_write_policy, can_read_dashboard
+):
+    headers = session_headers(_make_user(db_session, org, role))
 
     write = client.put("/api/v1/collections/policy", json={}, headers=headers)
     if can_write_policy:
@@ -94,6 +91,7 @@ def test_role_assignment_rules(actor, target, expected):
 
 
 def test_admin_cannot_cross_tenants(client, db_session, org):
+
     other = Organization(name="Other", slug="other-org")
     db_session.add(other)
     db_session.commit()

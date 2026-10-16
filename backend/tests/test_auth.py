@@ -141,12 +141,24 @@ def test_get_me_success(client: TestClient):
     )
     token = login_resp.json()["access_token"]
 
+    # An OWNER's first login is an MFA-enrolment token that cannot reach normal endpoints.
+    assert login_resp.json()["mfa_enrollment_required"] is True
+    blocked = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert blocked.status_code == 403
+
+    from tests.conftest import enroll_mfa
+
+    session, _ = enroll_mfa(client, token)
+    full = session["session"]["access_token"]
+
     # Get Me
-    me_resp = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+    me_resp = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {full}"})
     assert me_resp.status_code == 200
     me_data = me_resp.json()
     assert me_data["email"] == "test@example.com"
+    assert me_data["mfa_enabled"] is True
     assert "password_hash" not in me_data
+    assert "totp_secret_encrypted" not in me_data
 
 
 def test_get_me_unauthorized(client: TestClient):

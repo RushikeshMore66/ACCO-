@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from app.adapters.ai.openai_provider import ReplyExtractionProvider
 from app.api.deps import get_db
 from app.api.v1.endpoints.reply_analyses import get_reply_provider_factory
+from app.models.audit_event import AuditActorType
+from app.models.audit_hooks import mark_session_actor
 from app.models.email_delivery import DeliveryStatus, EmailDelivery, EmailWebhookEvent
 from app.services.email_provider import EmailReceivingProvider, get_receiving_provider
 from app.services.inbound_email_service import (
@@ -37,6 +39,7 @@ async def inbound_email_webhook(
     safely matches customer/invoice/thread, persists inbound collection message,
     and triggers advisory AI reply analysis.
     """
+    mark_session_actor(db, actor_type=AuditActorType.WEBHOOK)
     body_bytes = await request.body()
     headers_dict = dict(request.headers)
 
@@ -80,6 +83,7 @@ async def resend_webhook(
     Handles delivery status events (delivered, bounced, complained) and transparently
     routes inbound customer replies (email.received) to the inbound pipeline.
     """
+    mark_session_actor(db, actor_type=AuditActorType.WEBHOOK)
     body_bytes = await request.body()
     headers_dict = dict(request.headers)
 

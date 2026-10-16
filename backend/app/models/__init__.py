@@ -3,6 +3,9 @@ ACCO Database Models package.
 """
 
 from app.db.base import Base
+from app.models.audit_event import AuditEvent
+from app.models.audit_hooks import register_audit_hooks
+from app.models.auth_tokens import MfaRecoveryCode, RefreshToken, UserToken
 from app.models.collection_policy import CollectionPolicy
 from app.models.collection_workflow import (
     CollectionActivity,
@@ -24,7 +27,10 @@ from app.models.payment_reversal import PaymentReversal
 from app.models.reply_analysis import CustomerReplyAnalysis
 from app.models.user import User
 
+register_audit_hooks()
+
 __all__ = [
+    "AuditEvent",
     "Base",
     "CollectionActivity",
     "CollectionDispute",
@@ -36,10 +42,13 @@ __all__ = [
     "EmailDeliveryAttempt",
     "EmailWebhookEvent",
     "Invoice",
+    "MfaRecoveryCode",
     "Organization",
     "Payment",
     "PaymentAllocation",
     "PaymentPromise",
     "PaymentReversal",
+    "RefreshToken",
     "User",
+    "UserToken",
 ]

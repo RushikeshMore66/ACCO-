@@ -38,8 +38,8 @@ def test_admin_value_added_and_downgrade_demotes(pg_url, migrated_pg):
         conn.execute(
             text(
                 "INSERT INTO users (id, organization_id, email, full_name, password_hash, role, "
-                "is_active, created_at, updated_at) VALUES (:id, :org, 'a@x.example', 'A', 'h', "
-                "'ADMIN', true, now(), now())"
+                "is_active, failed_login_attempts, created_at, updated_at) VALUES (:id, :org, 'a@x.example', 'A', 'h', "
+                "'ADMIN', true, 0, now(), now())"
             ),
             {"id": user_id, "org": org_id},
         )

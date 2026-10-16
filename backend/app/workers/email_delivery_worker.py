@@ -5,6 +5,8 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
+from app.models.audit_event import AuditActorType
+from app.models.audit_hooks import mark_session_actor
 from app.models.collection_policy import CollectionPolicy
 from app.models.collection_workflow import (
     CollectionActivity,
@@ -236,6 +238,7 @@ def run_worker(once: bool = False, poll_interval: int = 10):
     logger.info("Starting Email Delivery Worker...")
     while True:
         with SessionLocal() as db:
+            mark_session_actor(db, actor_type=AuditActorType.WORKER)
             processed = process_batch(db)
 
         if once:

@@ -45,8 +45,28 @@ class Settings(BaseSettings):
     database_connect_timeout_seconds: int = Field(default=10, ge=1, le=60)
     database_direct_url: str | None = None  # Dedicated direct connection for migrations/admin
     jwt_secret_key: str | None = None
-    access_token_expire_minutes: int = 30
+    access_token_expire_minutes: int = Field(default=15, ge=1, le=120)
+    refresh_token_expire_days: int = Field(default=7, ge=1, le=90)
     jwt_issuer: str = "acco"
+
+    # Sign-in security (Tasks 0.4, 0.5, 0.7)
+    frontend_base_url: str = "http://localhost:3000"  # used to build emailed links
+    require_email_verification: bool | None = None  # None -> required outside development
+    login_max_failed_attempts: int = Field(default=5, ge=3, le=20)
+    login_lockout_minutes: int = Field(default=15, ge=1, le=1440)
+    password_reset_ttl_minutes: int = Field(default=60, ge=5, le=1440)
+    email_verification_ttl_hours: int = Field(default=24, ge=1, le=168)
+    mfa_issuer: str = "ACCO"
+    mfa_recovery_code_count: int = Field(default=10, ge=5, le=20)
+
+    # Number of trusted reverse-proxy hops whose X-Forwarded-For entry may be believed (0 = none).
+    trusted_proxy_hops: int = Field(default=0, ge=0, le=5)
+
+    # Field-level encryption: "key_id=base64key[,key_id2=base64key2]"; first (or the id named
+    # by encryption_primary_key_id) encrypts, all can decrypt. Generate with
+    # `python -c "from app.core.encryption import generate_key; print(generate_key())"`.
+    encryption_keys: SecretStr | None = None
+    encryption_primary_key_id: str | None = None
 
     # AI execution is opt-in: without a key, requests fail closed.
     openai_api_key: SecretStr | None = None
@@ -66,6 +86,12 @@ class Settings(BaseSettings):
     resend_api_key: SecretStr | None = None
     resend_from_email: str = "billing@acco.app"
     email_webhook_signing_secret: SecretStr | None = None
+
+    @property
+    def email_verification_required(self) -> bool:
+        if self.require_email_verification is not None:
+            return self.require_email_verification
+        return not self.is_development
 
     @property
     def is_development(self) -> bool:
@@ -110,6 +136,31 @@ class Settings(BaseSettings):
                     f"ACCO_JWT_SECRET_KEY must be at least {MIN_JWT_SECRET_LENGTH} characters "
                     "in non-development environments."
                 )
+
+        # 1b. Field-encryption keys (imported lazily: encryption imports this module)
+        from app.core.encryption import EncryptionError, parse_keys
+
+        key_spec = self.encryption_keys.get_secret_value() if self.encryption_keys else ""
+        if not key_spec.strip():
+            errors.append(
+                "ACCO_ENCRYPTION_KEYS is required and cannot be blank in non-development "
+                "environments."
+            )
+        else:
+            try:
+                parsed_keys = parse_keys(key_spec)
+            except EncryptionError as exc:
+                errors.append(f"ACCO_ENCRYPTION_KEYS is invalid: {exc}")
+            else:
+                if not parsed_keys:
+                    errors.append("ACCO_ENCRYPTION_KEYS contains no keys.")
+                elif (
+                    self.encryption_primary_key_id
+                    and self.encryption_primary_key_id not in parsed_keys
+                ):
+                    errors.append(
+                        "ACCO_ENCRYPTION_PRIMARY_KEY_ID does not match any configured key id."
+                    )
 
         # 2. Database URL
         if not self.database_url or not self.database_url.strip():

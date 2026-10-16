@@ -10,6 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
+from app.models.audit_event import AuditActorType
+from app.models.audit_hooks import mark_session_actor
 from app.models.collection_workflow import (
     CollectionActivity,
     EventType,
@@ -28,6 +30,7 @@ def sweep_expired_promises_task() -> int:
     Celery task entry point to sweep expired promises.
     """
     with SessionLocal() as db:
+        mark_session_actor(db, actor_type=AuditActorType.WORKER)
         return sweep_expired_promises(db)
 
 

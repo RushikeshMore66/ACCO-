@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 
 from app.db.session import SessionLocal
+from app.models.audit_event import AuditActorType
+from app.models.audit_hooks import mark_session_actor
 from app.models.collection_policy import CollectionPolicy
 from app.models.collection_workflow import (
     CollectionDispute,
@@ -28,6 +30,7 @@ def process_email_deliveries_task(batch_size: int = 25) -> int:
     Celery task to drain queued email deliveries.
     """
     with SessionLocal() as db:
+        mark_session_actor(db, actor_type=AuditActorType.WORKER)
         return process_batch(db, batch_size=batch_size)
 
 
@@ -41,6 +44,7 @@ def evaluate_receivables_reminders_task() -> int:
     eligible_count = 0
 
     with SessionLocal() as db:
+        mark_session_actor(db, actor_type=AuditActorType.WORKER)
         invoices = db.scalars(
             select(Invoice).where(Invoice.status == InvoiceStatus.ISSUED, Invoice.due_date < now)
         ).all()

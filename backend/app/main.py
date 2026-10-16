@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from app.api.v1.router import api_router
 from app.core.config import settings, validate_settings
+from app.core.middleware import RequestContextMiddleware
 from app.db.session import dispose_engine
 
 
@@ -23,6 +24,7 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+app.add_middleware(RequestContextMiddleware)
 app.include_router(api_router, prefix=settings.api_v1_prefix)
 
 

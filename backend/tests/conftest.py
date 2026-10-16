@@ -15,6 +15,22 @@ from app.main import app
 TEST_DATABASE_URL = "sqlite:///:memory:"
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _fast_password_hashing():
+    """Argon2id with minimal cost so the suite is not dominated by hashing (tests only)."""
+    from pwdlib import PasswordHash
+    from pwdlib.hashers.argon2 import Argon2Hasher
+
+    from app.core import security
+
+    original = security.password_hash
+    security.password_hash = PasswordHash(
+        (Argon2Hasher(time_cost=1, memory_cost=64, parallelism=1),)
+    )
+    yield
+    security.password_hash = original
+
+
 @pytest.fixture(scope="function")
 def engine():
     engine = create_engine(
@@ -54,6 +70,34 @@ def client(db_session) -> TestClient:
 
 
 @pytest.fixture(scope="function")
+def session_headers(db_session):
+    """Factory: real, MFA-verified session headers for a user created directly in the DB."""
+    from app.services.auth_service import issue_session
+
+    def _make(user, *, mfa_verified: bool = True) -> dict[str, str]:
+        tokens = issue_session(db_session, user, mfa_verified=mfa_verified)
+        db_session.commit()
+        return {"Authorization": f"Bearer {tokens.access_token}"}
+
+    return _make
+
+
+def enroll_mfa(client: TestClient, enrollment_token: str) -> tuple[dict, str]:
+    """Drive the real MFA enrolment endpoints; returns (session JSON, totp secret)."""
+    from app.core.totp import generate_totp
+
+    headers = {"Authorization": f"Bearer {enrollment_token}"}
+    setup = client.post("/api/v1/auth/mfa/setup", headers=headers)
+    assert setup.status_code == 200, setup.text
+    secret = setup.json()["secret"]
+    enable = client.post(
+        "/api/v1/auth/mfa/enable", json={"code": generate_totp(secret)}, headers=headers
+    )
+    assert enable.status_code == 200, enable.text
+    return enable.json(), secret
+
+
+@pytest.fixture(scope="function")
 def normal_user_token_headers(client: TestClient) -> dict[str, str]:
     # Register first
     client.post(
@@ -66,9 +110,11 @@ def normal_user_token_headers(client: TestClient) -> dict[str, str]:
             "password": "securepassword123",
         },
     )
-    # Login
+    # Login: the OWNER is privileged, so the first login returns a limited MFA-enrolment token.
     response = client.post(
         "/api/v1/auth/login", data={"username": "test@example.com", "password": "securepassword123"}
     )
-    token = response.json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
+    body = response.json()
+    assert body["mfa_enrollment_required"] is True
+    session, _ = enroll_mfa(client, body["access_token"])
+    return {"Authorization": f"Bearer {session['session']['access_token']}"}

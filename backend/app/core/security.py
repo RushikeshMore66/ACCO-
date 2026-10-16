@@ -1,3 +1,4 @@
+import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -34,24 +35,85 @@ def dummy_verify() -> None:
     password_hash.verify("dummy", DUMMY_HASH)
 
 
-def create_access_token(
-    subject: str | Any, organization_id: str | Any, expires_delta: timedelta | None = None
-) -> str:
-    """Create a signed JWT access token."""
-    if expires_delta:
-        expire = datetime.now(UTC) + expires_delta
-    else:
-        expire = datetime.now(UTC) + timedelta(minutes=settings.access_token_expire_minutes)
+ACCESS_TOKEN_TYPE = "access"
+MFA_TICKET_TYPE = "mfa_ticket"
+SCOPE_FULL = "full"
+SCOPE_MFA_ENROLLMENT = "mfa_enrollment"
+MFA_TICKET_TTL = timedelta(minutes=5)
 
-    to_encode = {
+
+def hash_token(token: str) -> str:
+    """SHA-256 hex digest used to store bearer secrets (refresh/reset/recovery codes)."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _encode(claims: dict[str, Any]) -> str:
+    if not settings.jwt_secret_key:
+        raise RuntimeError("JWT secret key is not configured. Cannot issue tokens.")
+    return jwt.encode(claims, settings.jwt_secret_key, algorithm="HS256")
+
+
+def create_access_token(
+    subject: str | Any,
+    organization_id: str | Any,
+    expires_delta: timedelta | None = None,
+    *,
+    session_id: str | Any | None = None,
+    mfa_verified: bool = False,
+    scope: str = SCOPE_FULL,
+) -> str:
+    """Create a signed JWT access token.
+
+    ``session_id`` (``sid``) is the refresh-token family, so revoking the family (logout,
+    password reset, replay detection) immediately invalidates access tokens too.
+    ``scope=mfa_enrollment`` tokens may only reach the MFA setup endpoints.
+    """
+    now = datetime.now(UTC)
+    expire = now + (expires_delta or timedelta(minutes=settings.access_token_expire_minutes))
+    claims: dict[str, Any] = {
         "exp": expire,
-        "iat": datetime.now(UTC),
+        "iat": now,
         "iss": settings.jwt_issuer,
         "sub": str(subject),
         "organization_id": str(organization_id),
+        "typ": ACCESS_TOKEN_TYPE,
+        "jti": secrets.token_hex(8),
+        "scope": scope,
+        "mfa": bool(mfa_verified),
     }
+    if session_id is not None:
+        claims["sid"] = str(session_id)
+    return _encode(claims)
 
+
+def create_mfa_ticket(subject: str | Any, organization_id: str | Any) -> str:
+    """Short-lived proof that the password step succeeded; exchangeable only at /auth/mfa/verify."""
+    now = datetime.now(UTC)
+    return _encode(
+        {
+            "exp": now + MFA_TICKET_TTL,
+            "iat": now,
+            "iss": settings.jwt_issuer,
+            "sub": str(subject),
+            "organization_id": str(organization_id),
+            "typ": MFA_TICKET_TYPE,
+            "jti": secrets.token_hex(8),
+        }
+    )
+
+
+def decode_token(token: str, expected_type: str) -> dict[str, Any]:
+    """Decode + validate signature, issuer, expiry and token type. Raises jwt.InvalidTokenError."""
     if not settings.jwt_secret_key:
-        raise RuntimeError("JWT secret key is not configured. Cannot issue tokens.")
-
-    return jwt.encode(to_encode, settings.jwt_secret_key, algorithm="HS256")
+        raise RuntimeError("JWT secret key is not configured.")
+    payload = jwt.decode(
+        token,
+        settings.jwt_secret_key,
+        algorithms=["HS256"],
+        issuer=settings.jwt_issuer,
+        options={"require": ["exp", "iat", "sub"]},
+    )
+    # Tokens minted before the typ claim existed are treated as access tokens.
+    if payload.get("typ", ACCESS_TOKEN_TYPE) != expected_type:
+        raise jwt.InvalidTokenError("Unexpected token type")
+    return payload

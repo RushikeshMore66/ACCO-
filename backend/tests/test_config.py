@@ -23,6 +23,7 @@ def _make_valid_non_dev_settings(**overrides) -> Settings:
         "database_url": "postgresql+psycopg://user:password@localhost:5432/db",
         "email_webhook_signing_secret": SecretStr("whsec_synthetic_signing_secret_12345"),
         "celery_broker_url": "redis://localhost:6379/0",
+        "encryption_keys": SecretStr("k1=" + "A" * 43),
     }
     defaults.update(overrides)
     return Settings(**defaults)
@@ -268,3 +269,26 @@ def test_development_allows_placeholder_and_short_secrets():
         jwt_secret_key="replace_this_with_a_long_random_string",
     )
     assert validate_settings(s) is s
+
+
+def test_missing_encryption_keys_in_non_dev():
+    s = _make_valid_non_dev_settings(encryption_keys=None)
+    with pytest.raises(ConfigurationError) as exc_info:
+        validate_settings(s)
+    assert "ACCO_ENCRYPTION_KEYS is required" in str(exc_info.value)
+
+
+@pytest.mark.parametrize("bad", ["notakey", "k1=short", "k1=" + "A" * 43 + ",k1=" + "A" * 43])
+def test_malformed_encryption_keys_in_non_dev(bad):
+    s = _make_valid_non_dev_settings(encryption_keys=SecretStr(bad))
+    with pytest.raises(ConfigurationError) as exc_info:
+        validate_settings(s)
+    assert "ACCO_ENCRYPTION_KEYS is invalid" in str(exc_info.value)
+    assert bad not in str(exc_info.value) or bad == "notakey"
+
+
+def test_unknown_primary_encryption_key_id_in_non_dev():
+    s = _make_valid_non_dev_settings(encryption_primary_key_id="nope")
+    with pytest.raises(ConfigurationError) as exc_info:
+        validate_settings(s)
+    assert "ACCO_ENCRYPTION_PRIMARY_KEY_ID" in str(exc_info.value)
