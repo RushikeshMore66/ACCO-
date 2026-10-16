@@ -1,18 +1,24 @@
 import { NextResponse } from "next/server";
-import { backendFetch } from "@/lib/auth/session";
+import { backendFetchWithRefresh } from "@/lib/auth/session";
 
 /**
- * BFF /me route — reads the JWT from the httpOnly cookie and
- * forwards to FastAPI /auth/me. Returns the UserResponse to the client.
+ * BFF /me route — reads the JWT from the httpOnly cookie (refreshing it once if it has
+ * expired) and forwards to FastAPI /auth/me. Returns the UserResponse to the client.
  */
 export async function GET() {
-  const response = await backendFetch("/auth/me");
+  const response = await backendFetchWithRefresh("/auth/me");
 
   if (!response) {
     return NextResponse.json({ detail: "Not authenticated" }, { status: 401 });
   }
 
   if (!response.ok) {
+    if (response.status === 403) {
+      return NextResponse.json(
+        { detail: "Additional verification required" },
+        { status: 403 }
+      );
+    }
     return NextResponse.json(
       { detail: "Session expired or invalid" },
       { status: 401 }

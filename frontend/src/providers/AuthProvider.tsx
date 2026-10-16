@@ -16,6 +16,8 @@ export interface AuthUser {
   is_active: boolean;
   role: "OWNER" | "ADMIN" | "FINANCE_MANAGER" | "COLLECTOR" | "VIEWER";
   created_at: string;
+  mfa_enabled?: boolean;
+  email_verified?: boolean;
 }
 
 interface AuthContextValue {

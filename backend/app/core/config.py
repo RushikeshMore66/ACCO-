@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     jwt_secret_key: str | None = None
     access_token_expire_minutes: int = Field(default=15, ge=1, le=120)
     refresh_token_expire_days: int = Field(default=7, ge=1, le=90)
+    # A just-rotated refresh token presented again within this window (parallel browser requests
+    # racing on refresh) receives a fresh pair instead of revoking the session. 0 = strict.
+    refresh_reuse_leeway_seconds: int = Field(default=10, ge=0, le=60)
     jwt_issuer: str = "acco"
 
     # Sign-in security (Tasks 0.4, 0.5, 0.7)

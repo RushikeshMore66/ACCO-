@@ -1,41 +1,61 @@
 import { cookies } from "next/headers";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
-const SESSION_COOKIE = "acco_session";
+import {
+  API_BASE,
+  MFA_TICKET_COOKIE,
+  REFRESH_COOKIE,
+  SESSION_COOKIE,
+  cookiesForTokens,
+  mfaTicketCookie,
+  refreshTokens,
+  type TokenPair,
+} from "./tokens";
 
 /**
- * Set the JWT access token in an httpOnly, SameSite=Strict cookie.
- * This keeps the token out of JavaScript-accessible storage.
+ * Persist a token pair in httpOnly, SameSite=Strict cookies. The browser's JavaScript never
+ * sees either token.
  */
-export async function setSessionCookie(
-  token: string,
-  expiresInSeconds: number
-): Promise<void> {
+export async function setSessionCookies(tokens: TokenPair): Promise<void> {
   const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
-    path: "/",
-    maxAge: expiresInSeconds,
-  });
+  for (const spec of cookiesForTokens(tokens)) {
+    cookieStore.set(spec.name, spec.value, spec.options);
+  }
+  cookieStore.delete(MFA_TICKET_COOKIE);
+}
+
+export async function setMfaTicket(ticket: string): Promise<void> {
+  const cookieStore = await cookies();
+  const spec = mfaTicketCookie(ticket);
+  cookieStore.set(spec.name, spec.value, spec.options);
+}
+
+export async function getMfaTicket(): Promise<string | null> {
+  const cookieStore = await cookies();
+  return cookieStore.get(MFA_TICKET_COOKIE)?.value ?? null;
 }
 
 /**
- * Clear the session cookie (logout).
+ * Clear every auth cookie (logout / failed refresh).
  */
-export async function clearSessionCookie(): Promise<void> {
+export async function clearSessionCookies(): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.delete(SESSION_COOKIE);
+  cookieStore.delete(REFRESH_COOKIE);
+  cookieStore.delete(MFA_TICKET_COOKIE);
 }
 
 /**
- * Get the current JWT from the httpOnly cookie.
+ * Get the current access JWT from the httpOnly cookie.
  * Returns null if no session exists.
  */
 export async function getSessionToken(): Promise<string | null> {
   const cookieStore = await cookies();
   return cookieStore.get(SESSION_COOKIE)?.value ?? null;
+}
+
+export async function getRefreshToken(): Promise<string | null> {
+  const cookieStore = await cookies();
+  return cookieStore.get(REFRESH_COOKIE)?.value ?? null;
 }
 
 /**
@@ -60,6 +80,40 @@ export async function backendFetch(
   });
 }
 
+/**
+ * Route-handler variant of backendFetch: if the access token is missing/expired, exchange the
+ * refresh cookie once (single-flight), persist the new cookies and retry. Only usable where
+ * cookies may be written (route handlers / server actions), never in server components.
+ */
+export async function backendFetchWithRefresh(
+  path: string,
+  init: RequestInit = {}
+): Promise<Response | null> {
+  const response = await backendFetch(path, init);
+  if (response && response.status !== 401) return response;
+
+  const refreshToken = await getRefreshToken();
+  if (!refreshToken) return response;
+
+  const result = await refreshTokens(refreshToken);
+  if (result.status === "invalid") {
+    await clearSessionCookies();
+    return response;
+  }
+  if (result.status !== "ok") return response;
+
+  await setSessionCookies(result.tokens);
+  const url = `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
+  return fetch(url, {
+    ...init,
+    headers: {
+      ...(init.headers ?? {}),
+      Authorization: `Bearer ${result.tokens.access_token}`,
+      "Content-Type": "application/json",
+    },
+  });
+}
+
 export interface SessionUser {
   id: string;
   organization_id: string;
@@ -68,6 +122,8 @@ export interface SessionUser {
   is_active: boolean;
   role: "OWNER" | "ADMIN" | "FINANCE_MANAGER" | "COLLECTOR" | "VIEWER";
   created_at: string;
+  mfa_enabled?: boolean;
+  email_verified?: boolean;
 }
 
 /**
@@ -85,5 +141,20 @@ export async function validateSession(): Promise<SessionUser | null> {
     return user as SessionUser;
   } catch {
     return null;
+  }
+}
+
+/**
+ * True when the session cookie holds the limited MFA-enrolment token (privileged user who has
+ * not set up TOTP yet): the backend answers 403 "MFA enrollment required" to normal requests.
+ */
+export async function needsMfaEnrollment(): Promise<boolean> {
+  try {
+    const response = await backendFetch("/auth/me", { cache: "no-store" });
+    if (!response || response.status !== 403) return false;
+    const body = await response.json().catch(() => ({}));
+    return body?.detail === "MFA enrollment required";
+  } catch {
+    return false;
   }
 }

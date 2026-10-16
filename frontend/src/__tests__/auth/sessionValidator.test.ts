@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { validateSession, getSessionToken, setSessionCookie, clearSessionCookie } from "@/lib/auth/session";
+import { validateSession, getSessionToken, setSessionCookies, clearSessionCookies } from "@/lib/auth/session";
 import { cookies } from "next/headers";
 
 vi.mock("next/headers", () => ({
@@ -77,8 +77,13 @@ describe("validateSession", () => {
     expect(user).toBeNull();
   });
 
-  it("sets and clears session cookie properly", async () => {
-    await setSessionCookie("new-token", 3600);
+  it("sets access and refresh cookies as httpOnly strict cookies", async () => {
+    await setSessionCookies({
+      access_token: "new-token",
+      expires_in: 900,
+      refresh_token: "refresh-token-value",
+      refresh_expires_in: 604800,
+    });
     expect(mockCookieStore.set).toHaveBeenCalledWith(
       "acco_session",
       "new-token",
@@ -86,11 +91,31 @@ describe("validateSession", () => {
         httpOnly: true,
         sameSite: "strict",
         path: "/",
-        maxAge: 3600,
+        // outlives the 15-minute JWT so an expired token triggers a refresh, not a logout
+        maxAge: 604800,
       })
     );
+    expect(mockCookieStore.set).toHaveBeenCalledWith(
+      "acco_refresh",
+      "refresh-token-value",
+      expect.objectContaining({ httpOnly: true, sameSite: "strict", maxAge: 604800 })
+    );
+  });
 
-    await clearSessionCookie();
+  it("limits the MFA-enrolment session to the access-token lifetime and sets no refresh cookie", async () => {
+    await setSessionCookies({ access_token: "enroll", expires_in: 900, mfa_enrollment_required: true });
+    expect(mockCookieStore.set).toHaveBeenCalledTimes(1);
+    expect(mockCookieStore.set).toHaveBeenCalledWith(
+      "acco_session",
+      "enroll",
+      expect.objectContaining({ maxAge: 900 })
+    );
+  });
+
+  it("clears every auth cookie", async () => {
+    await clearSessionCookies();
     expect(mockCookieStore.delete).toHaveBeenCalledWith("acco_session");
+    expect(mockCookieStore.delete).toHaveBeenCalledWith("acco_refresh");
+    expect(mockCookieStore.delete).toHaveBeenCalledWith("acco_mfa_ticket");
   });
 });

@@ -6,6 +6,8 @@ import { Eye, EyeOff, Mail, Lock, User } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useAuth } from "@/providers/AuthProvider";
+import { AuthMessage } from "@/components/auth/AuthMessage";
+import { validateNewPassword } from "@/lib/auth/password";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -33,6 +35,7 @@ function LoginFormContent() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   function validate(): boolean {
     const newErrors: FormErrors = {};
@@ -46,8 +49,9 @@ function LoginFormContent() {
     }
     if (!form.password) {
       newErrors.password = "Password is required";
-    } else if (mode === "signup" && form.password.length < 8) {
-      newErrors.password = "Password must be at least 8 characters";
+    } else if (mode === "signup") {
+      const problem = validateNewPassword(form.password);
+      if (problem) newErrors.password = problem;
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -82,6 +86,26 @@ function LoginFormContent() {
         return;
       }
 
+      const data = await res.json().catch(() => ({}));
+
+      if (mode === "signup") {
+        // Registration never creates a session: sign in next (verify the email first where required).
+        setMode("signin");
+        setForm({ name: "", email: form.email, password: "" });
+        setNotice(
+          "Account created. If email verification is enabled, check your inbox for the link, then sign in."
+        );
+        return;
+      }
+      if (data.mfa_required) {
+        router.push("/mfa/verify");
+        return;
+      }
+      if (data.mfa_enrollment_required) {
+        router.push("/mfa/setup");
+        return;
+      }
+
       await refresh();
 
       // Safe redirect logic
@@ -111,6 +135,7 @@ function LoginFormContent() {
   const switchMode = (newMode: AuthMode) => {
     setMode(newMode);
     setErrors({});
+    setNotice(null);
     setForm({ name: "", email: "", password: "" });
   };
 
@@ -155,6 +180,12 @@ function LoginFormContent() {
             : "Get started with AI-powered accounts receivable"}
         </p>
       </div>
+
+      {notice && (
+        <div className="mb-4">
+          <AuthMessage kind="success">{notice}</AuthMessage>
+        </div>
+      )}
 
       {/* General error */}
       <AnimatePresence>

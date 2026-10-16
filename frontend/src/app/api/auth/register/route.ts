@@ -1,18 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { setSessionCookie } from "@/lib/auth/session";
+import { API_BASE } from "@/lib/auth/tokens";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
-
+/**
+ * BFF registration. Creates the organization + owner and returns { registered: true }.
+ * The user then signs in (after verifying their email where the deployment requires it) —
+ * owners must enrol MFA at first sign-in, so no session is created here.
+ */
 export async function POST(request: NextRequest) {
   let body: { name?: string; email?: string; password?: string };
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json(
-      { detail: "Invalid request body" },
-      { status: 400 }
-    );
+    return NextResponse.json({ detail: "Invalid request body" }, { status: 400 });
   }
 
   const { name, email, password } = body;
@@ -48,46 +47,13 @@ export async function POST(request: NextRequest) {
 
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({}));
-    return NextResponse.json(
-      { detail: errBody.detail ?? "Registration failed" },
-      { status: res.status }
-    );
+    let detail = "Registration failed. Check your details and try again.";
+    if (typeof errBody.detail === "string") detail = errBody.detail;
+    else if (Array.isArray(errBody.detail) && errBody.detail[0]?.msg) {
+      detail = String(errBody.detail[0].msg).replace(/^Value error, /, "");
+    }
+    return NextResponse.json({ detail }, { status: res.status });
   }
 
-  // Now log the user in
-  const formData = new URLSearchParams();
-  formData.set("username", email.trim().toLowerCase());
-  formData.set("password", password);
-
-  let tokenResponse: Response;
-  try {
-    tokenResponse = await fetch(`${API_BASE}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: formData.toString(),
-    });
-  } catch {
-    return NextResponse.json(
-      { detail: "Registration succeeded but login failed" },
-      { status: 503 }
-    );
-  }
-
-  if (!tokenResponse.ok) {
-    const errBody = await tokenResponse.json().catch(() => ({}));
-    return NextResponse.json(
-      { detail: errBody.detail ?? "Authentication failed after registration" },
-      { status: tokenResponse.status }
-    );
-  }
-
-  const tokenData: {
-    access_token: string;
-    token_type: string;
-    expires_in: number;
-  } = await tokenResponse.json();
-
-  await setSessionCookie(tokenData.access_token, tokenData.expires_in);
-
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ registered: true }, { status: 201 });
 }

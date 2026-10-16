@@ -70,7 +70,8 @@ def test_refresh_rotates_and_keeps_session_family(client, db_session):
     assert len({r.family_id for r in db_session.scalars(select(RefreshToken)).all()}) == 1
 
 
-def test_replaying_a_used_refresh_token_revokes_the_whole_family(client, db_session):
+def test_replaying_a_used_refresh_token_revokes_the_whole_family(client, db_session, monkeypatch):
+    monkeypatch.setattr(settings, "refresh_reuse_leeway_seconds", 0)
     first = _collector_login(client, db_session)
     rotated = client.post(
         "/api/v1/auth/refresh", json={"refresh_token": first["refresh_token"]}
@@ -160,3 +161,27 @@ def test_privileged_refresh_preserves_mfa_proof(client):
 
 def test_refresh_requires_body(client):
     assert client.post("/api/v1/auth/refresh", json={}).status_code == 422
+
+
+def test_immediate_reuse_within_leeway_is_a_benign_race_not_theft(client, db_session):
+    first = _collector_login(client, db_session)
+    a = client.post("/api/v1/auth/refresh", json={"refresh_token": first["refresh_token"]})
+    b = client.post("/api/v1/auth/refresh", json={"refresh_token": first["refresh_token"]})
+    assert a.status_code == b.status_code == 200
+    assert a.json()["refresh_token"] != b.json()["refresh_token"]
+    assert (
+        client.get("/api/v1/auth/me", headers=_bearer(b.json()["access_token"])).status_code == 200
+    )
+
+
+def test_reuse_after_leeway_revokes_family(client, db_session):
+    first = _collector_login(client, db_session)
+    client.post("/api/v1/auth/refresh", json={"refresh_token": first["refresh_token"]})
+    old = db_session.scalars(
+        select(RefreshToken).where(RefreshToken.token_hash == hash_token(first["refresh_token"]))
+    ).one()
+    old.used_at = datetime.now(UTC) - timedelta(seconds=settings.refresh_reuse_leeway_seconds + 5)
+    db_session.commit()
+    replay = client.post("/api/v1/auth/refresh", json={"refresh_token": first["refresh_token"]})
+    assert replay.status_code == 401
+    assert all(r.revoked_at is not None for r in db_session.scalars(select(RefreshToken)).all())

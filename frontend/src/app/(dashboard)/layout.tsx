@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { validateSession } from "@/lib/auth/session";
+import { needsMfaEnrollment, validateSession } from "@/lib/auth/session";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +33,9 @@ export default async function DashboardLayout({
   const user = await validateSession();
 
   if (!user) {
+    if (await needsMfaEnrollment()) {
+      redirect("/mfa/setup");
+    }
     const headersList = await headers();
     const pathname = headersList.get("x-pathname");
     const safeNext = getSafeNextParam(pathname);

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { validateSession } from "@/lib/auth/session";
+import { needsMfaEnrollment, validateSession } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +14,10 @@ export default async function HomePage() {
 
   if (user) {
     redirect("/dashboard");
+  }
+
+  if (await needsMfaEnrollment()) {
+    redirect("/mfa/setup");
   }
 
   redirect("/login");

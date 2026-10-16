@@ -1,28 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { setSessionCookie } from "@/lib/auth/session";
-
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
+import { setMfaTicket, setSessionCookies } from "@/lib/auth/session";
+import { API_BASE, type TokenPair } from "@/lib/auth/tokens";
 
 /**
  * BFF login route handler.
  *
- * The browser POSTs JSON { email, password }.
- * This handler converts to OAuth2PasswordRequestForm (x-www-form-urlencoded)
- * and forwards to the FastAPI /auth/login endpoint.
- * On success, sets an httpOnly session cookie and returns the UserResponse.
+ * The browser POSTs JSON { email, password }. This handler converts it to an OAuth2 form request
+ * for FastAPI and translates the outcome:
+ *   - tokens issued            -> httpOnly cookies are set, the user profile is returned
+ *   - 202 MFA challenge        -> a 5-minute ticket cookie is set, { mfa_required: true } is returned
+ *   - MFA enrolment required   -> a limited session cookie is set, { mfa_enrollment_required: true }
  *
- * NEVER returns the raw JWT to the browser — it stays server-side only.
+ * Tokens are NEVER returned to the browser.
  */
 export async function POST(request: NextRequest) {
   let body: { email?: string; password?: string };
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json(
-      { detail: "Invalid request body" },
-      { status: 400 }
-    );
+    return NextResponse.json({ detail: "Invalid request body" }, { status: 400 });
   }
 
   const { email, password } = body;
@@ -33,14 +29,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Build OAuth2PasswordRequestForm payload
   const formData = new URLSearchParams();
   formData.set("username", email.trim().toLowerCase());
   formData.set("password", password);
 
-  let tokenResponse: Response;
+  let backend: Response;
   try {
-    tokenResponse = await fetch(`${API_BASE}/auth/login`, {
+    backend = await fetch(`${API_BASE}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: formData.toString(),
@@ -52,38 +47,38 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (!tokenResponse.ok) {
-    const errBody = await tokenResponse.json().catch(() => ({}));
-    return NextResponse.json(
-      { detail: errBody.detail ?? "Authentication failed" },
-      { status: tokenResponse.status }
-    );
+  if (backend.status === 202) {
+    const challenge: { mfa_ticket: string } = await backend.json();
+    await setMfaTicket(challenge.mfa_ticket);
+    return NextResponse.json({ mfa_required: true }, { status: 200 });
   }
 
-  const tokenData: {
-    access_token: string;
-    token_type: string;
-    expires_in: number;
-  } = await tokenResponse.json();
+  if (!backend.ok) {
+    const errBody = await backend.json().catch(() => ({}));
+    const response = NextResponse.json(
+      { detail: typeof errBody.detail === "string" ? errBody.detail : "Authentication failed" },
+      { status: backend.status }
+    );
+    const retryAfter = backend.headers.get("retry-after");
+    if (retryAfter) response.headers.set("Retry-After", retryAfter);
+    return response;
+  }
 
-  // Store the JWT in an httpOnly cookie — never expose it to JS
-  await setSessionCookie(tokenData.access_token, tokenData.expires_in);
+  const tokens: TokenPair = await backend.json();
+  await setSessionCookies(tokens);
 
-  // Fetch the user profile to return to the client
-  let meResponse: Response;
+  if (tokens.mfa_enrollment_required) {
+    return NextResponse.json({ mfa_enrollment_required: true }, { status: 200 });
+  }
+
+  let me: Response;
   try {
-    meResponse = await fetch(`${API_BASE}/auth/me`, {
-      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    me = await fetch(`${API_BASE}/auth/me`, {
+      headers: { Authorization: `Bearer ${tokens.access_token}` },
     });
   } catch {
-    // Cookie was set — login succeeded even if /me fails
     return NextResponse.json({ success: true });
   }
-
-  if (!meResponse.ok) {
-    return NextResponse.json({ success: true });
-  }
-
-  const user = await meResponse.json();
-  return NextResponse.json(user, { status: 200 });
+  if (!me.ok) return NextResponse.json({ success: true });
+  return NextResponse.json(await me.json(), { status: 200 });
 }

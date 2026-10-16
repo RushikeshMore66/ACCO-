@@ -214,6 +214,29 @@ def rotate_refresh_token(db: Session, raw_token: str) -> tuple[User, SessionToke
     if row is None:
         raise invalid
 
+    within_leeway = (
+        row.used_at is not None
+        and row.revoked_at is None
+        and (utcnow() - as_utc(row.used_at)).total_seconds()
+        <= settings.refresh_reuse_leeway_seconds
+    )
+    if within_leeway:
+        # Benign race (e.g. parallel requests refreshing together): hand out another pair from the
+        # same family without revoking. Outside this window a reuse is treated as theft.
+        user = db.get(User, row.user_id)
+        if user is not None and user.is_active and user.organization.is_active:
+            record_audit_event(
+                db,
+                action="auth.refresh.reuse_leeway",
+                organization_id=row.organization_id,
+                actor_type=AuditActorType.ANONYMOUS,
+                entity_type="user",
+                entity_id=row.user_id,
+            )
+            return user, issue_session(
+                db, user, mfa_verified=row.mfa_verified, family_id=row.family_id
+            )
+
     if row.used_at is not None or row.revoked_at is not None:
         # Replay of a rotated/revoked token: assume theft, end the whole session family.
         revoke_family(db, row.family_id, "reuse_detected")
