@@ -14,7 +14,7 @@ export interface AuthUser {
   email: string;
   full_name: string;
   is_active: boolean;
-  role: "OWNER" | "FINANCE_MANAGER" | "COLLECTOR" | "VIEWER";
+  role: "OWNER" | "ADMIN" | "FINANCE_MANAGER" | "COLLECTOR" | "VIEWER";
   created_at: string;
 }
 

@@ -39,7 +39,7 @@ type CollectionStage =
   | "DISPUTE_REVIEW"
   | string;
 
-type UserRole = "OWNER" | "FINANCE_MANAGER" | "COLLECTOR" | "VIEWER";
+type UserRole = "OWNER" | "ADMIN" | "FINANCE_MANAGER" | "COLLECTOR" | "VIEWER";
 
 const invoiceStatusConfig: Record<
   InvoiceStatus,
@@ -89,6 +89,7 @@ const roleConfig: Record<
   { label: string; variant: "success" | "warning" | "error" | "info" | "muted" | "purple" | "default" }
 > = {
   OWNER: { label: "Owner", variant: "purple" },
+  ADMIN: { label: "Admin", variant: "purple" },
   FINANCE_MANAGER: { label: "Finance Manager", variant: "info" },
   COLLECTOR: { label: "Collector", variant: "default" },
   VIEWER: { label: "Viewer", variant: "muted" },

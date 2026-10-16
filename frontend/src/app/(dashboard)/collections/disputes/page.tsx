@@ -252,8 +252,8 @@ export default function DisputesPage() {
   // Role permissions
   // OWNER & FINANCE_MANAGER can resolve/reject; COLLECTOR, FM & OWNER can start review or create
   const userRole = user?.role;
-  const canStartReview = !userRole || userRole === "OWNER" || userRole === "FINANCE_MANAGER" || userRole === "COLLECTOR";
-  const canResolveOrReject = !userRole || userRole === "OWNER" || userRole === "FINANCE_MANAGER";
+  const canStartReview = !userRole || userRole === "OWNER" || userRole === "ADMIN" || userRole === "FINANCE_MANAGER" || userRole === "COLLECTOR";
+  const canResolveOrReject = !userRole || userRole === "OWNER" || userRole === "ADMIN" || userRole === "FINANCE_MANAGER";
   const canCreate = !userRole || userRole !== "VIEWER";
 
   return (

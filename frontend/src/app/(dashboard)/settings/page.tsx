@@ -120,6 +120,7 @@ export default function SettingsPage() {
   const canManagePolicies =
     isDemoMode ||
     currentUser?.role === "OWNER" ||
+    currentUser?.role === "ADMIN" ||
     currentUser?.role === "FINANCE_MANAGER";
 
   const handlePolicySubmit = (e: React.FormEvent) => {

@@ -16,6 +16,13 @@ export function RoleBadge({ role, showIcon = true }: RoleBadgeProps) {
           <span>Owner</span>
         </Badge>
       );
+    case "ADMIN":
+      return (
+        <Badge variant="purple" className="font-medium gap-1">
+          {showIcon && <Crown size={12} className="shrink-0" />}
+          <span>Admin</span>
+        </Badge>
+      );
     case "FINANCE_MANAGER":
       return (
         <Badge variant="info" className="font-medium gap-1">

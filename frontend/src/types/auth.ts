@@ -1,4 +1,4 @@
-export type UserRole = "OWNER" | "FINANCE_MANAGER" | "COLLECTOR" | "VIEWER";
+export type UserRole = "OWNER" | "ADMIN" | "FINANCE_MANAGER" | "COLLECTOR" | "VIEWER";
 
 export type TeamMemberStatus = "ACTIVE" | "PENDING_INVITATION" | "INACTIVE";
 

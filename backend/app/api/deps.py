@@ -7,6 +7,7 @@ from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.permissions import expand_allowed_roles
 from app.db.session import get_db
 from app.models.user import User, UserRole
 
@@ -76,8 +77,10 @@ def get_current_organization_id(current_user: User = Depends(get_current_user)) 
 
 
 def require_roles(allowed_roles: list[UserRole]):
+    effective_roles = expand_allowed_roles(allowed_roles)
+
     def role_checker(current_user: User = Depends(get_current_user)) -> User:
-        if current_user.role not in allowed_roles:
+        if current_user.role not in effective_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions"
             )
